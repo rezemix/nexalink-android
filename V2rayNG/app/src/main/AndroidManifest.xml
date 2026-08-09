@@ -195,6 +195,9 @@
             android:name=".ui.checkupdate.CheckUpdateActivity"
             android:exported="false" />
         <activity
+            android:name=".ui.account.NexalinkAccountActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.backup.BackupActivity"
             android:exported="false" />
         <activity

@@ -33,6 +33,7 @@ import online.nexalink.app.ui.compose.AppDivider
 import online.nexalink.app.ui.compose.verticalScrollbar
 
 enum class MainDestination(@DrawableRes val iconRes: Int, @StringRes val labelRes: Int) {
+    NexalinkAccount(R.drawable.ic_lock_24dp, R.string.nexalink_account_title),
     Subscriptions(R.drawable.ic_subscriptions_24dp, R.string.title_sub_setting),
     PerAppProxy(R.drawable.ic_per_apps_24dp, R.string.per_app_proxy_settings),
     Routing(R.drawable.ic_routing_24dp, R.string.routing_settings_title),
@@ -46,6 +47,7 @@ enum class MainDestination(@DrawableRes val iconRes: Int, @StringRes val labelRe
 }
 
 private val primaryDrawerItems = listOf(
+    MainDestination.NexalinkAccount,
     MainDestination.Subscriptions,
     MainDestination.PerAppProxy,
     MainDestination.Routing,

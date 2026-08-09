@@ -27,6 +27,7 @@ import online.nexalink.app.handler.SettingsManager
 import online.nexalink.app.ui.AboutActivity
 import online.nexalink.app.ui.backup.BackupActivity
 import online.nexalink.app.ui.base.HelperBaseComponentActivity
+import online.nexalink.app.ui.account.NexalinkAccountActivity
 import online.nexalink.app.ui.checkupdate.CheckUpdateActivity
 import online.nexalink.app.ui.logcat.LogcatActivity
 import online.nexalink.app.ui.perappproxy.PerAppProxyActivity
@@ -138,6 +139,7 @@ class MainActivity : HelperBaseComponentActivity() {
 
     private fun navigateTo(destination: MainDestination) {
         val intent = when (destination) {
+            MainDestination.NexalinkAccount -> Intent(this, NexalinkAccountActivity::class.java)
             MainDestination.Subscriptions -> Intent(this, SubSettingActivity::class.java)
             MainDestination.PerAppProxy -> Intent(this, PerAppProxyActivity::class.java)
             MainDestination.Routing -> Intent(this, RoutingSettingActivity::class.java)
