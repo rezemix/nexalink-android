@@ -34,7 +34,7 @@ echo 'include $(call all-subdir-makefiles)' > jni/Android.mk
     APP_PLATFORM=android-24 \
     NDK_LIBS_OUT="$TMPDIR/libs" \
     NDK_OUT="$TMPDIR/obj" \
-    "APP_CFLAGS=-O3 -DPKGNAME=com/v2ray/ang/service" \
+    "APP_CFLAGS=-O3 -DPKGNAME=online/nexalink/app/service" \
     "APP_LDFLAGS=-Wl,--build-id=none -Wl,--hash-style=gnu" \
 
 # 2) Standalone executable (libhevsockstun.so) — run as a separate root

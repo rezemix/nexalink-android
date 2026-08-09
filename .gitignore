@@ -64,3 +64,8 @@ V2rayNG/app/google-services.json
 # Ignore OS-specific files
 Thumbs.db
 .DS_Store
+
+# Собранные нативные артефакты (Go/C) — генерируются локально при сборке,
+# см. README про build requirements. Не коммитим бинарники.
+/libs/
+V2rayNG/app/libs/
