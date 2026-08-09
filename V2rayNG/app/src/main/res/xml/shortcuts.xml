@@ -10,8 +10,8 @@
 
         <intent
             android:action="android.intent.action.VIEW"
-            android:targetClass="com.v2ray.ang.ui.shortcut.ScSwitchActivity"
-            android:targetPackage="com.v2ray.ang" />
+            android:targetClass="online.nexalink.app.ui.shortcut.ScSwitchActivity"
+            android:targetPackage="online.nexalink.app" />
         <categories android:name="android.shortcut.conversation" />
     </shortcut>
     <shortcut
@@ -24,8 +24,8 @@
 
         <intent
             android:action="android.intent.action.VIEW"
-            android:targetClass="com.v2ray.ang.ui.shortcut.ScScannerActivity"
-            android:targetPackage="com.v2ray.ang" />
+            android:targetClass="online.nexalink.app.ui.shortcut.ScScannerActivity"
+            android:targetPackage="online.nexalink.app" />
         <categories android:name="android.shortcut.conversation" />
     </shortcut>
     <shortcut
@@ -38,8 +38,8 @@
 
         <intent
             android:action="android.intent.action.VIEW"
-            android:targetClass="com.v2ray.ang.ui.shortcut.ScStartActivity"
-            android:targetPackage="com.v2ray.ang" />
+            android:targetClass="online.nexalink.app.ui.shortcut.ScStartActivity"
+            android:targetPackage="online.nexalink.app" />
         <categories android:name="android.shortcut.conversation" />
     </shortcut>
     <shortcut
@@ -52,8 +52,8 @@
 
         <intent
             android:action="android.intent.action.VIEW"
-            android:targetClass="com.v2ray.ang.ui.shortcut.ScStopActivity"
-            android:targetPackage="com.v2ray.ang" />
+            android:targetClass="online.nexalink.app.ui.shortcut.ScStopActivity"
+            android:targetPackage="online.nexalink.app" />
         <categories android:name="android.shortcut.conversation" />
     </shortcut>
 </shortcuts>

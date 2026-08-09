@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.v2ray.ang"
+    namespace = "online.nexalink.app"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.v2ray.ang"
+        applicationId = "online.nexalink.app"
         minSdk = 24
         targetSdk = 37
         versionCode = 743
