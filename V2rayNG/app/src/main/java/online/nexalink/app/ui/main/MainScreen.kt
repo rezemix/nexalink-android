@@ -176,6 +176,7 @@ fun MainScreen(
                 showServerPicker = false
             },
             onTestAll = { onAction(MainAction.TestRealAllServers) },
+            onImportAction = onAction,
             onDismiss = { showServerPicker = false },
         )
     }

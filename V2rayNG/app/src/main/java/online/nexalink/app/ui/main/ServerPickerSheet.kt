@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -19,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,6 +29,10 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,6 +62,7 @@ fun ServerPickerSheet(
     isTesting: Boolean,
     onSelect: (String) -> Unit,
     onTestAll: () -> Unit,
+    onImportAction: (MainAction) -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(
@@ -75,14 +82,35 @@ fun ServerPickerSheet(
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                 )
-                if (isTesting) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                } else {
-                    IconButton(onClick = onTestAll) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_check_update_24dp),
-                            contentDescription = null,
-                        )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Добавить сервер вручную (QR / буфер обмена / файл) — например,
+                    // WireGuard-конфиг домашнего Pi4-релея для обхода блокировок.
+                    var showImportMenu by remember { mutableStateOf(false) }
+                    Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
+                        IconButton(onClick = { showImportMenu = true }) {
+                            Icon(painter = painterResource(R.drawable.ic_add_24dp), contentDescription = null)
+                        }
+                        DropdownMenu(
+                            expanded = showImportMenu,
+                            onDismissRequest = { showImportMenu = false },
+                        ) {
+                            ImportMenuContent(
+                                onAction = { action ->
+                                    showImportMenu = false
+                                    onImportAction(action)
+                                }
+                            )
+                        }
+                    }
+                    if (isTesting) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        IconButton(onClick = onTestAll) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_check_update_24dp),
+                                contentDescription = null,
+                            )
+                        }
                     }
                 }
             }
