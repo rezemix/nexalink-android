@@ -89,11 +89,14 @@ fun MainScreen(
 
     // Автоматически пингуем серверы при первом появлении списка (как в
     // крупных VPN-сервисах — не нужно нажимать отдельную кнопку).
+    // Используем "настоящий" тест через реальный протокол (TestRealAllServers),
+    // а не голый TCP-коннект — обычный TCP-пинг к VLESS/Reality-серверам часто
+    // режется DPI провайдера и показывает -1мс даже на рабочих серверах.
     LaunchedEffect(activeGroupId, servers.size) {
         if (activeGroupId != null && servers.isNotEmpty() && !isTesting &&
             servers.all { it.testDelayString.isEmpty() }
         ) {
-            onAction(MainAction.TestAllServers)
+            onAction(MainAction.TestRealAllServers)
         }
     }
 
@@ -172,7 +175,7 @@ fun MainScreen(
                 onAction(MainAction.SelectServer(guid))
                 showServerPicker = false
             },
-            onTestAll = { onAction(MainAction.TestAllServers) },
+            onTestAll = { onAction(MainAction.TestRealAllServers) },
             onDismiss = { showServerPicker = false },
         )
     }
