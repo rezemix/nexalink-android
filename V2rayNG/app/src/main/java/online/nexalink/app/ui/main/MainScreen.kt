@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -35,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -84,6 +86,16 @@ fun MainScreen(
     val currentServerName = remember(selectedGuid) {
         selectedGuid?.let { MmkvManager.decodeServerConfig(it)?.remarks }
     } ?: "Сервер не выбран"
+
+    // Автоматически пингуем серверы при первом появлении списка (как в
+    // крупных VPN-сервисах — не нужно нажимать отдельную кнопку).
+    LaunchedEffect(activeGroupId, servers.size) {
+        if (activeGroupId != null && servers.isNotEmpty() && !isTesting &&
+            servers.all { it.testDelayString.isEmpty() }
+        ) {
+            onAction(MainAction.TestAllServers)
+        }
+    }
 
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -174,6 +186,7 @@ private fun HomeTopBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .statusBarsPadding()
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
