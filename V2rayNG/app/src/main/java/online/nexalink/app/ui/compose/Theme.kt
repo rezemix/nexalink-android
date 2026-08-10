@@ -23,89 +23,98 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+// Фирменные цвета NEXALINK — совпадают с сайтом (nexalink.online): тёмно-синий
+// navy как primary, оранжевый accent как secondary.
 private val LightColor = lightColorScheme(
-    primary = Color(0xFF000000), // Black
+    primary = Color(0xFF0A1F3A), // NEXALINK Navy
     onPrimary = Color(0xFFFFFFFF), // White
-    primaryContainer = Color(0xFFE0E0E0), // Light Gray
-    onPrimaryContainer = Color(0xFF000000), // Black
-    secondary = Color(0xFFf97910), // Orange
+    primaryContainer = Color(0xFFE7EBF0), // Navy-soft (сайт: --navy-soft)
+    onPrimaryContainer = Color(0xFF0A1F3A), // Navy
+    secondary = Color(0xFFEE451B), // NEXALINK Orange (сайт: --accent)
     onSecondary = Color(0xFFFFFFFF), // White
-    secondaryContainer = Color(0xFFFFE8D6), // Pale Orange
-    onSecondaryContainer = Color(0xFF2B1700), // Dark Brown
-    tertiary = Color(0xFF009966), // Green
+    secondaryContainer = Color(0xFFFDEAE4), // Pale Orange (сайт: --accent-soft)
+    onSecondaryContainer = Color(0xFF3A1206), // Dark Brown
+    tertiary = Color(0xFF1A8A4A), // Green (успех/подключено)
     onTertiary = Color(0xFFFFFFFF), // White
-    tertiaryContainer = Color(0xFFA0F2D0), // Light Green
+    tertiaryContainer = Color(0xFFE7F5EC), // Light Green
     onTertiaryContainer = Color(0xFF00201A), // Dark Teal
-    error = Color(0xFFBA1A1A), // Red
-    errorContainer = Color(0xFFFFDAD6), // Light Red
+    error = Color(0xFFC2362C), // Red (сайт: --danger)
+    errorContainer = Color(0xFFFBECE9), // Light Red
     onError = Color(0xFFFFFFFF), // White
     onErrorContainer = Color(0xFF410002), // Dark Red
-    background = Color(0xFFFFFFFF), // White
-    onBackground = Color(0xFF1C1B1F), // Near Black
+    background = Color(0xFFFAFAF8), // Off-white (сайт: --bg)
+    onBackground = Color(0xFF0A1F3A), // Navy
     surface = Color(0xFFFFFFFF), // White
-    onSurface = Color(0xFF1C1B1F), // Near Black
-    surfaceVariant = Color(0xFFE7E0EC), // Light Purple Gray
-    onSurfaceVariant = Color(0xFF49454F), // Dark Gray
-    outline = Color(0xFF79747E), // Medium Gray
-    outlineVariant = Color(0xFFCAC4D0), // Light Gray
-    inverseSurface = Color(0xFF313033), // Dark Gray
+    onSurface = Color(0xFF0A1F3A), // Navy
+    surfaceVariant = Color(0xFFECEAE5), // Light warm gray (сайт: --border)
+    onSurfaceVariant = Color(0xFF6B6B6B), // Muted gray
+    outline = Color(0xFFDDD9D2), // Border-strong
+    outlineVariant = Color(0xFFECEAE5), // Border
+    inverseSurface = Color(0xFF0A1F3A), // Navy
     inverseOnSurface = Color(0xFFF4EFF4), // Very Light Gray
-    inversePrimary = Color(0xFFC0C0C0), // Silver Gray
+    inversePrimary = Color(0xFFAEC0D6), // Muted navy-blue
     scrim = Color(0xFF000000), // Black
-    surfaceTint = Color(0xFF000000), // Black
+    surfaceTint = Color(0xFF0A1F3A), // Navy
     surfaceContainerLowest = Color(0xFFFFFFFF), // White
-    surfaceContainerLow = Color(0xFFF7F7F7), // Very Light Gray
-    surfaceContainer = Color(0xFFF1F1F1), // Light Gray
-    surfaceContainerHigh = Color(0xFFEBEBEB), // Light Gray
-    surfaceContainerHighest = Color(0xFFE5E5E5), // Light Gray
+    surfaceContainerLow = Color(0xFFF8F8F6), // Very Light warm Gray
+    surfaceContainer = Color(0xFFF1F1EE), // Light warm Gray
+    surfaceContainerHigh = Color(0xFFEBEBE7), // Light warm Gray
+    surfaceContainerHighest = Color(0xFFE5E5E1), // Light warm Gray
 )
 
 private val DarkColor = darkColorScheme(
-    primary = Color(0xFFC0C0C0), // Silver Gray
-    onPrimary = Color(0xFF303030), // Dark Gray
-    primaryContainer = Color(0xFF474747), // Gray
-    onPrimaryContainer = Color(0xFFE0E0E0), // Light Gray
-    secondary = Color(0xFFf97910), // Orange
-    onSecondary = Color(0xFF4E2600), // Dark Brown
-    secondaryContainer = Color(0xFF6F3800), // Brown
-    onSecondaryContainer = Color(0xFFFFE8D6), // Pale Orange
-    tertiary = Color(0xFF83D6B5), // Mint Green
+    primary = Color(0xFF8FA8C9), // Muted light navy-blue
+    onPrimary = Color(0xFF0A1F3A), // Navy
+    primaryContainer = Color(0xFF1B3357), // Deep navy
+    onPrimaryContainer = Color(0xFFDCE6F2), // Pale blue
+    secondary = Color(0xFFFF6A3D), // Brighter orange for dark bg
+    onSecondary = Color(0xFF3A1206), // Dark Brown
+    secondaryContainer = Color(0xFF6F2C10), // Burnt orange
+    onSecondaryContainer = Color(0xFFFFE0D3), // Pale Orange
+    tertiary = Color(0xFF6FCB94), // Mint Green
     onTertiary = Color(0xFF00382E), // Dark Teal
-    tertiaryContainer = Color(0xFF005143), // Teal
+    tertiaryContainer = Color(0xFF0F4A2E), // Deep green
     onTertiaryContainer = Color(0xFFA0F2D0), // Light Green
     error = Color(0xFFFFB4AB), // Light Red
     errorContainer = Color(0xFF93000A), // Dark Red
     onError = Color(0xFF690005), // Deep Red
     onErrorContainer = Color(0xFFFFDAD6), // Light Red
-    background = Color(0xFF1C1B1F), // Near Black
-    onBackground = Color(0xFFE6E1E5), // Light Gray
-    surface = Color(0xFF1C1B1F), // Near Black
-    onSurface = Color(0xFFE6E1E5), // Light Gray
-    surfaceVariant = Color(0xFF49454F), // Dark Gray
-    onSurfaceVariant = Color(0xFFCAC4D0), // Light Gray
-    outline = Color(0xFF938F99), // Grayish Purple
-    outlineVariant = Color(0xFF49454F), // Dark Gray
-    inverseSurface = Color(0xFFE6E1E5), // Light Gray
-    inverseOnSurface = Color(0xFF1C1B1F), // Near Black
-    inversePrimary = Color(0xFF000000), // Black
+    background = Color(0xFF0A1626), // Near-navy black
+    onBackground = Color(0xFFE6E9EE), // Light Gray-blue
+    surface = Color(0xFF0F1E33), // Deep navy surface
+    onSurface = Color(0xFFE6E9EE), // Light Gray-blue
+    surfaceVariant = Color(0xFF23344D), // Muted navy
+    onSurfaceVariant = Color(0xFFB7C2D0), // Light gray-blue
+    outline = Color(0xFF3D4F6B), // Muted navy border
+    outlineVariant = Color(0xFF23344D), // Muted navy
+    inverseSurface = Color(0xFFE6E9EE), // Light Gray-blue
+    inverseOnSurface = Color(0xFF0F1E33), // Deep navy
+    inversePrimary = Color(0xFF0A1F3A), // Navy
     scrim = Color(0xFF000000), // Black
-    surfaceTint = Color(0xFFC0C0C0), // Silver Gray
-    surfaceContainerLowest = Color(0xFF0F0F12), // Near Black
-    surfaceContainerLow = Color(0xFF1A191D), // Dark Gray
-    surfaceContainer = Color(0xFF1E1D21), // Dark Gray
-    surfaceContainerHigh = Color(0xFF282729), // Dark Gray
-    surfaceContainerHighest = Color(0xFF333234), // Dark Gray
+    surfaceTint = Color(0xFF8FA8C9), // Muted light navy-blue
+    surfaceContainerLowest = Color(0xFF060D18), // Near-black navy
+    surfaceContainerLow = Color(0xFF0C1729), // Dark navy
+    surfaceContainer = Color(0xFF11203A), // Dark navy
+    surfaceContainerHigh = Color(0xFF162945), // Dark navy
+    surfaceContainerHighest = Color(0xFF1C3251), // Dark navy
 )
 
 // Semantic Colors
-val colorPing = Color(0xFF009966) // Green
-val colorPingRed = Color(0xFFFF0099) // Pink Red
-val colorConfigType = Color(0xFFf97910) // Orange
-val colorFabActive = Color(0xFFf97910) // Orange
+val colorPing = Color(0xFF1A8A4A) // Green
+val colorPingRed = Color(0xFFC2362C) // Red
+val colorConfigType = Color(0xFFEE451B) // Orange
+val colorFabActive = Color(0xFFEE451B) // Orange
 val colorFabInactiveLight = Color(0xFF9C9C9C) // Gray
 val colorFabInactiveDark = Color(0xFF646464) // Dark Gray
 val dividerColorLight = Color(0xFFE0E0E0) // Light Gray
 val dividerColorDark = Color(0xFF424242) // Dark Gray
+
+// Большая кнопка подключения на главном экране.
+val colorConnected = Color(0xFF1DB954)      // Зелёный — подключено
+val colorConnectedDark = Color(0xFF17A34A)
+val colorConnecting = Color(0xFFEE451B)     // Оранжевый (акцент) — идёт подключение
+val colorDisconnectedLight = Color(0xFF0A1F3A) // Navy — отключено (светлая тема)
+val colorDisconnectedDark = Color(0xFF3D4F6B)   // Приглушённый navy — отключено (тёмная тема)
 
 // Toast Colors 70%
 val toastNormalBgLight = Color(0xB3353A3E) // Dark Gray
