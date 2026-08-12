@@ -15,6 +15,7 @@ import online.nexalink.app.dto.entities.SubscriptionCache
 import online.nexalink.app.extension.isComplexType
 import online.nexalink.app.extension.matchesPattern
 import online.nexalink.app.extension.moveItem
+import online.nexalink.app.handler.UpdateCheckerManager
 import online.nexalink.app.ui.base.BaseViewModel
 import online.nexalink.app.util.LogUtil
 import kotlinx.coroutines.CancellationException
@@ -189,6 +190,10 @@ class MainViewModel(
                 _uiState.update { it.copy(shareQRCodeBitmap = null) }
             }
 
+            MainAction.DismissUpdateDialog -> {
+                _uiState.update { it.copy(availableUpdate = null) }
+            }
+
             MainAction.ToggleService,
             MainAction.TestCurrentServer,
             MainAction.ImportQRcode,
@@ -217,6 +222,26 @@ class MainViewModel(
                 throw cancelled
             } catch (error: Exception) {
                 LogUtil.e(AppConfig.TAG, "Main background initialization failed", error)
+            }
+        }
+        checkForUpdateSilently()
+    }
+
+    // NEXALINK: автопроверка обновления при каждом запуске — раньше нужно
+    // было заходить в "Проверка обновлений" вручную. Не блокирует и не
+    // мешает основной инициализации (отдельная корутина); при неудаче
+    // (нет сети и т.п.) просто молча ничего не показываем.
+    private fun checkForUpdateSilently() {
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                val result = UpdateCheckerManager.checkForUpdate()
+                if (result.hasUpdate) {
+                    _uiState.update { it.copy(availableUpdate = result) }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                LogUtil.e(AppConfig.TAG, "Update check failed", error)
             }
         }
     }
@@ -665,8 +690,18 @@ class MainViewModel(
 
     fun removeServerAndRefresh(guid: String) {
         if (guid == uiState.value.selectedGuid) {
-            toast(R.string.toast_action_not_allowed)
-            return
+            // NEXALINK: раньше просто отказывали тостом "нельзя" — неудобно,
+            // когда нужно почистить именно текущий (например, сломанный
+            // старый) профиль. Молча переключаемся на другой доступный
+            // сервер и продолжаем удаление; отказываем только если больше
+            // выбрать нечего.
+            val fallback = currentServers().firstOrNull { it.guid != guid }
+            if (fallback != null) {
+                updateSelectedGuid(fallback.guid)
+            } else {
+                toast(R.string.toast_action_not_allowed)
+                return
+            }
         }
         viewModelScope.launch(ioDispatcher) {
             dataSource.removeServer(guid)

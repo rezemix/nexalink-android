@@ -1,5 +1,6 @@
 package online.nexalink.app.ui.main
 
+import online.nexalink.app.dto.CheckUpdateResult
 import online.nexalink.app.dto.GroupMapItem
 import online.nexalink.app.dto.LocateTarget
 
@@ -19,7 +20,10 @@ data class MainUiState(
     val shareQRCodeBitmap: android.graphics.Bitmap? = null,
     // NEXALINK: авто-режим сам подбирает самый быстрый сервер по последнему
     // пингу; выключается автоматически, если пользователь выбрал сервер вручную.
-    val isAutoMode: Boolean = true
+    val isAutoMode: Boolean = true,
+    // NEXALINK: результат автопроверки обновления при запуске — если есть
+    // новая версия, на главном экране всплывает диалог с кнопкой "Обновить".
+    val availableUpdate: CheckUpdateResult? = null
 )
 
 /**
@@ -57,6 +61,7 @@ sealed interface MainAction {
     data class ShareClipboard(val guid: String) : MainAction
     data class ShareFullContent(val guid: String) : MainAction
     data object DismissQRCodeDialog : MainAction
+    data object DismissUpdateDialog : MainAction
 
     data class ImportBatchConfig(val configText: String) : MainAction
 

@@ -132,6 +132,11 @@ object AppConfig {
     const val ANDROID_PACKAGE_NAME_LIST_URL = "$GITHUB_RAW_URL/2dust/androidpackagenamelist/master/proxy.txt"
     const val APP_URL = "$GITHUB_URL/rezemix/nexalink-android"
     const val APP_API_URL = "https://api.github.com/repos/rezemix/nexalink-android/releases"
+
+    // NEXALINK: у нас нет GitHub Releases (собираем и выкладываем APK вручную
+    // на свой сайт) — проверка обновлений идёт через свой маленький JSON,
+    // а не через APP_API_URL выше.
+    const val NEXALINK_UPDATE_CHECK_URL = "https://nexalink.online/dl/version.json"
     const val APP_ISSUES_URL = "$APP_URL/issues"
     const val APP_WIKI_MODE = "$APP_URL/wiki/Mode"
     const val APP_PRIVACY_POLICY = "https://nexalink.online/privacy"

@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -33,6 +34,7 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -47,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,6 +62,7 @@ import online.nexalink.app.handler.MmkvManager
 import online.nexalink.app.ui.compose.colorConnected
 import online.nexalink.app.ui.compose.colorConnecting
 import online.nexalink.app.ui.compose.colorPingRed
+import online.nexalink.app.util.Utils
 
 /**
  * Главный экран — простой и дружелюбный, как у крупных VPN-сервисов: одна
@@ -186,6 +190,36 @@ fun MainScreen(
             onTestAll = { onAction(MainAction.TestRealAllServers) },
             onImportAction = onAction,
             onDismiss = { showServerPicker = false },
+        )
+    }
+
+    // NEXALINK: автопроверка обновления при запуске — не нужно самому
+    // заходить в "Проверка обновлений", всплывает само при наличии новой версии.
+    val availableUpdate = uiState.availableUpdate
+    if (availableUpdate != null) {
+        val context = LocalContext.current
+        AlertDialog(
+            onDismissRequest = { onAction(MainAction.DismissUpdateDialog) },
+            title = { Text("Доступна версия ${availableUpdate.latestVersion}") },
+            text = {
+                Text(
+                    availableUpdate.releaseNotes?.takeIf { it.isNotBlank() }
+                        ?: "Рекомендуем обновиться."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onAction(MainAction.DismissUpdateDialog)
+                    availableUpdate.downloadUrl?.let { Utils.openUri(context, it) }
+                }) {
+                    Text("Обновить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { onAction(MainAction.DismissUpdateDialog) }) {
+                    Text("Позже")
+                }
+            },
         )
     }
 }

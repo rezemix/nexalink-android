@@ -1,12 +1,10 @@
 package online.nexalink.app.handler
 
-import android.os.Build
 import online.nexalink.app.AppConfig
 import online.nexalink.app.BuildConfig
 import online.nexalink.app.dto.CheckUpdateResult
-import online.nexalink.app.dto.GitHubRelease
+import online.nexalink.app.dto.NexalinkVersionInfo
 import online.nexalink.app.dto.UrlContentRequest
-import online.nexalink.app.extension.concatUrl
 import online.nexalink.app.util.HttpUtil
 import online.nexalink.app.util.JsonUtil
 import online.nexalink.app.util.LogUtil
@@ -14,23 +12,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 object UpdateCheckerManager {
+    // NEXALINK: параметр includePreRelease оставлен только чтобы не трогать
+    // вызывающий код (CheckUpdateViewModel/автопроверка) — у нашей простой
+    // точки проверки нет отдельного пре-релиз канала, игнорируется.
     suspend fun checkForUpdate(includePreRelease: Boolean = false): CheckUpdateResult = withContext(Dispatchers.IO) {
-        val url = if (includePreRelease) {
-            AppConfig.APP_API_URL
-        } else {
-            AppConfig.APP_API_URL.concatUrl("latest")
-        }
-
-        val proxyUsername = SettingsManager.getSocksUsername()
-        val proxyPassword = SettingsManager.getSocksPassword()
+        val url = AppConfig.NEXALINK_UPDATE_CHECK_URL
 
         var response = HttpUtil.getUrlContent(
-            UrlContentRequest(
-                url = url,
-                timeout = 5000
-            )
+            UrlContentRequest(url = url, timeout = 5000)
         )
         if (response.isNullOrEmpty()) {
+            // На случай, если прямой доступ к сайту сейчас недоступен (например,
+            // во время БПЛА-ограничений) — пробуем через прокси активного
+            // соединения, если оно есть.
+            val proxyUsername = SettingsManager.getSocksUsername()
+            val proxyPassword = SettingsManager.getSocksPassword()
             val httpPort = SettingsManager.getHttpPort()
             response = HttpUtil.getUrlContent(
                 UrlContentRequest(
@@ -41,34 +37,25 @@ object UpdateCheckerManager {
                     proxyPassword = proxyPassword
                 )
             )
-                ?: throw IllegalStateException("Failed to get response")
         }
-
-        val latestRelease = if (includePreRelease) {
-            JsonUtil.fromJsonSafe(response, Array<GitHubRelease>::class.java)
-                ?.firstOrNull()
-                ?: throw IllegalStateException("No pre-release found")
-        } else {
-            JsonUtil.fromJsonSafe(response, GitHubRelease::class.java)
-        }
-        if (latestRelease == null) {
+        if (response.isNullOrEmpty()) {
             return@withContext CheckUpdateResult(hasUpdate = false)
         }
 
-        val latestVersion = latestRelease.tagName.removePrefix("v")
+        val info = JsonUtil.fromJsonSafe(response, NexalinkVersionInfo::class.java)
+            ?: return@withContext CheckUpdateResult(hasUpdate = false)
+
         LogUtil.i(
             AppConfig.TAG,
-            "Found new version: $latestVersion (current: ${BuildConfig.VERSION_NAME})"
+            "Found version: ${info.version} (current: ${BuildConfig.VERSION_NAME})"
         )
 
-        return@withContext if (compareVersions(latestVersion, BuildConfig.VERSION_NAME) > 0) {
-            val downloadUrl = getDownloadUrl(latestRelease, Build.SUPPORTED_ABIS[0])
+        return@withContext if (compareVersions(info.version, BuildConfig.VERSION_NAME) > 0) {
             CheckUpdateResult(
                 hasUpdate = true,
-                latestVersion = latestVersion,
-                releaseNotes = latestRelease.body,
-                downloadUrl = downloadUrl,
-                isPreRelease = latestRelease.prerelease
+                latestVersion = info.version,
+                releaseNotes = info.notes,
+                downloadUrl = info.downloadUrl
             )
         } else {
             CheckUpdateResult(hasUpdate = false)
@@ -80,27 +67,10 @@ object UpdateCheckerManager {
         val v2 = version2.split(".")
 
         for (i in 0 until maxOf(v1.size, v2.size)) {
-            val num1 = if (i < v1.size) v1[i].toInt() else 0
-            val num2 = if (i < v2.size) v2[i].toInt() else 0
+            val num1 = (i < v1.size).let { if (it) v1[i].toIntOrNull() ?: 0 else 0 }
+            val num2 = (i < v2.size).let { if (it) v2[i].toIntOrNull() ?: 0 else 0 }
             if (num1 != num2) return num1 - num2
         }
         return 0
-    }
-
-    private fun getDownloadUrl(release: GitHubRelease, abi: String): String {
-        val fDroid = "fdroid"
-
-        val assetsByAbi = release.assets.filter {
-            (it.name.contains(abi, true))
-        }
-
-        val asset = if (BuildConfig.APPLICATION_ID.contains(fDroid, ignoreCase = true)) {
-            assetsByAbi.firstOrNull { it.name.contains(fDroid) }
-        } else {
-            assetsByAbi.firstOrNull { !it.name.contains(fDroid) }
-        }
-
-        return asset?.browserDownloadUrl
-            ?: throw IllegalStateException("No compatible APK found")
     }
 }
