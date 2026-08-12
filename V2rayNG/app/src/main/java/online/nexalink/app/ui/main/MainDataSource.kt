@@ -22,6 +22,10 @@ interface MainDataSource : Closeable {
     fun getDoubleColumnDisplay(): Boolean
     fun isGroupAllDisplayEnabled(): Boolean
 
+    // NEXALINK: авто-выбор самого быстрого сервера для обычных пользователей.
+    fun getAutoServerMode(): Boolean
+    fun setAutoServerMode(enabled: Boolean)
+
     fun getString(resId: Int): String
     fun getString(resId: Int, vararg formatArgs: Any): String
 

@@ -19,6 +19,11 @@ object AppConfig {
     // Default subscription ID for ungrouped servers
     const val DEFAULT_SUBSCRIPTION_ID = "__default_subscription__"
 
+    // NEXALINK: авто-выбор самого быстрого сервера (по умолчанию включён — для
+    // обычных пользователей) и переключатель простого/продвинутого режима.
+    const val PREF_AUTO_SERVER_MODE = "pref_nx_auto_server_mode"
+    const val PREF_ADVANCED_MODE = "pref_nx_advanced_mode"
+
     /** Preferences mapped to MMKV storage. */
     const val PREF_SNIFFING_ENABLED = "pref_sniffing_enabled"
     const val PREF_ROUTE_ONLY_ENABLED = "pref_route_only_enabled"

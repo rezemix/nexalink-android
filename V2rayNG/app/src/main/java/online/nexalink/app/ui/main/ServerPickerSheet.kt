@@ -60,7 +60,9 @@ fun ServerPickerSheet(
     servers: List<ServersCache>,
     selectedGuid: String?,
     isTesting: Boolean,
+    isAutoMode: Boolean,
     onSelect: (String) -> Unit,
+    onSetAutoMode: () -> Unit,
     onTestAll: () -> Unit,
     onImportAction: (MainAction) -> Unit,
     onDismiss: () -> Unit,
@@ -129,14 +131,23 @@ fun ServerPickerSheet(
                     )
                 }
             } else {
+                val autoServerName = servers.firstOrNull { it.guid == selectedGuid }?.profile?.remarks
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 24.dp),
                 ) {
+                    item(key = "auto") {
+                        AutoServerRow(
+                            isSelected = isAutoMode,
+                            resolvedServerName = autoServerName,
+                            onClick = onSetAutoMode,
+                        )
+                    }
+                    item(key = "auto-divider") { AppDivider() }
                     items(servers, key = { it.guid }) { server ->
                         ServerPickerRow(
                             server = server,
-                            isSelected = server.guid == selectedGuid,
+                            isSelected = !isAutoMode && server.guid == selectedGuid,
                             onClick = { onSelect(server.guid) },
                         )
                     }
@@ -148,6 +159,67 @@ fun ServerPickerSheet(
 
 @Composable
 private fun stringResourceServerPickerTitle(): String = "Выбор сервера"
+
+/**
+ * Закреплённый первый пункт: приложение само выбирает самый быстрый по
+ * последнему пингу сервер. Рекомендуемый режим для обычных пользователей —
+ * ручной выбор ниже остаётся доступным, но уже не обязателен.
+ */
+@Composable
+private fun AutoServerRow(
+    isSelected: Boolean,
+    resolvedServerName: String?,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .background(
+                if (isSelected) MaterialTheme.colorScheme.secondaryContainer
+                else Color.Transparent
+            )
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(text = "⚡", style = MaterialTheme.typography.titleMedium)
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Авто (рекомендуем)",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = resolvedServerName ?: "Подберём самый быстрый сервер",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        if (isSelected) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
 
 @Composable
 private fun ServerPickerRow(

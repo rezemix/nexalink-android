@@ -116,6 +116,13 @@ class MainRepository(
     override fun isGroupAllDisplayEnabled(): Boolean =
         MmkvManager.decodeSettingsBool(AppConfig.PREF_GROUP_ALL_DISPLAY)
 
+    override fun getAutoServerMode(): Boolean =
+        MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SERVER_MODE, true)
+
+    override fun setAutoServerMode(enabled: Boolean) {
+        MmkvManager.encodeSettings(AppConfig.PREF_AUTO_SERVER_MODE, enabled)
+    }
+
     override fun getString(resId: Int): String = app.getString(resId)
 
     override fun getString(resId: Int, vararg formatArgs: Any): String = app.getString(resId, *formatArgs)

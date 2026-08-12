@@ -4,6 +4,7 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,18 +18,23 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import online.nexalink.app.AppConfig
 import online.nexalink.app.R
+import online.nexalink.app.handler.MmkvManager
 import online.nexalink.app.ui.compose.AppDivider
 import online.nexalink.app.ui.compose.verticalScrollbar
 
@@ -63,9 +69,24 @@ private val drawerItems = primaryDrawerItems + listOf(
     MainDestination.About
 )
 
+// NEXALINK: пункты для продвинутых пользователей — в простом режиме скрыты,
+// т.к. обычному пользователю они не нужны (программа сама всё настроит).
+private val powerUserDestinations = setOf(
+    MainDestination.PerAppProxy,
+    MainDestination.Routing,
+    MainDestination.UserAssets,
+    MainDestination.Logcat,
+    MainDestination.BackupRestore
+)
+
 @Composable
 fun MainDrawerContent(drawerState: DrawerState, onNavigate: (MainDestination) -> Unit) {
     val drawerScrollState = rememberScrollState()
+    var advancedMode by remember {
+        mutableStateOf(MmkvManager.decodeSettingsBool(AppConfig.PREF_ADVANCED_MODE, false))
+    }
+    val visibleItems = drawerItems.filter { advancedMode || it !in powerUserDestinations }
+    val visiblePrimaryCount = primaryDrawerItems.count { advancedMode || it !in powerUserDestinations }
 
     ModalDrawerSheet(
         drawerState = drawerState,
@@ -78,33 +99,63 @@ fun MainDrawerContent(drawerState: DrawerState, onNavigate: (MainDestination) ->
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(160.dp)
+                    .height(140.dp),
+                color = MaterialTheme.colorScheme.primary
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(16.dp),
+                        .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text(
                         text = stringResource(R.string.app_name),
-                        style = MaterialTheme.typography.headlineLarge.copy(
-                            fontFamily = FontFamily(Font(R.font.montserrat_thin)),
-                            fontWeight = FontWeight.Thin
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary
                         ),
                         textAlign = TextAlign.Center
                     )
                 }
             }
-            drawerItems.forEachIndexed { index, item ->
-                if (index == primaryDrawerItems.size) AppDivider()
+            visibleItems.forEachIndexed { index, item ->
+                if (index == visiblePrimaryCount) AppDivider()
                 NavigationDrawerItem(
                     label = { Text(stringResource(item.labelRes)) },
                     selected = false,
                     onClick = { onNavigate(item) },
                     icon = { Icon(painterResource(item.iconRes), contentDescription = null) },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+            }
+
+            AppDivider()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Продвинутый режим",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Ручная настройка для опытных пользователей",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = advancedMode,
+                    onCheckedChange = {
+                        advancedMode = it
+                        MmkvManager.encodeSettings(AppConfig.PREF_ADVANCED_MODE, it)
+                    }
                 )
             }
         }

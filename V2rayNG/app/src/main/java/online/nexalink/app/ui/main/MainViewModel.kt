@@ -55,7 +55,8 @@ class MainViewModel(
             selectedGuid = dataSource.getSelectServer(),
             statusText = disconnectedText,
             confirmRemove = dataSource.getConfirmRemove(),
-            doubleColumnDisplay = dataSource.getDoubleColumnDisplay()
+            doubleColumnDisplay = dataSource.getDoubleColumnDisplay(),
+            isAutoMode = dataSource.getAutoServerMode()
         )
     )
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -101,7 +102,9 @@ class MainViewModel(
             MainServiceEvent.StateRunning -> updateRunningState(true, clearTestingText = false)
             MainServiceEvent.StateNotRunning -> updateRunningState(false, clearTestingText = false)
             MainServiceEvent.StateStartSuccess -> {
-                toastSuccess(R.string.toast_services_success)
+                // Не показываем тост — большая кнопка на главном экране уже
+                // чётко сообщает о подключении (цвет + текст), доп. уведомление
+                // только загромождает интерфейс.
                 updateRunningState(true)
             }
 
@@ -172,6 +175,7 @@ class MainViewModel(
             MainAction.ExportAll -> exportAllAsync()
             is MainAction.SelectGroup -> subscriptionIdChanged(action.groupId)
             is MainAction.SelectServer -> updateSelectedGuid(action.guid)
+            is MainAction.SetAutoMode -> setAutoMode(action.enabled)
             is MainAction.RemoveServer -> removeServerAndRefresh(action.guid)
             is MainAction.Search -> filterConfig(action.query)
             is MainAction.ImportBatchConfig -> importBatchConfig(action.configText)
@@ -592,9 +596,9 @@ class MainViewModel(
         }
     }
 
-    fun reloadAllGroups(groupIds: List<String>) {
+    fun reloadAllGroups(groupIds: List<String>): Job {
         reloadJob?.cancel()
-        reloadJob = viewModelScope.launch(preloadDispatcher) {
+        return viewModelScope.launch(preloadDispatcher) {
             val selected = uiState.value.selectedGroupId
             val order = buildList {
                 if (selected in groupIds) add(selected)
@@ -605,7 +609,7 @@ class MainViewModel(
                 if (index > 0) delay(32L)
                 updateGroupUi(groupId, loadGroup(groupId, forceRefresh = true))
             }
-        }
+        }.also { reloadJob = it }
     }
 
     fun filterConfig(keyword: String) {
@@ -625,11 +629,38 @@ class MainViewModel(
 
     fun updateSelectedGuid(guid: String) {
         dataSource.setSelectServer(guid)
-        _uiState.update { it.copy(selectedGuid = guid) }
+        // Ручной выбор сервера — пользователь явно взял управление на себя,
+        // авто-режим больше не должен переключать его на другой сервер.
+        dataSource.setAutoServerMode(false)
+        _uiState.update { it.copy(selectedGuid = guid, isAutoMode = false) }
     }
 
     fun refreshSelectedGuid() {
         _uiState.update { it.copy(selectedGuid = dataSource.getSelectServer()) }
+    }
+
+    // ---------- Auto server mode ----------
+    private fun setAutoMode(enabled: Boolean) {
+        dataSource.setAutoServerMode(enabled)
+        _uiState.update { it.copy(isAutoMode = enabled) }
+        if (enabled) {
+            selectBestServerIfAuto()
+        }
+    }
+
+    /**
+     * NEXALINK: подбирает самый быстрый (по последнему пингу) сервер текущей
+     * группы и делает его выбранным — не трогая isAutoMode, в отличие от
+     * updateSelectedGuid(), которая вызывается при ручном выборе.
+     */
+    private fun selectBestServerIfAuto() {
+        val best = mutableServersForGroup(uiState.value.selectedGroupId).value
+            .filter { it.testDelayString.isNotEmpty() && it.testDelayMillis >= 0L }
+            .minByOrNull { it.testDelayMillis }
+            ?: return
+        if (best.guid == uiState.value.selectedGuid) return
+        dataSource.setSelectServer(best.guid)
+        _uiState.update { it.copy(selectedGuid = best.guid) }
     }
 
     fun removeServerAndRefresh(guid: String) {
@@ -718,7 +749,10 @@ class MainViewModel(
                     statusText = if (it.isRunning) connectedText else disconnectedText
                 )
             }
-            reloadAllGroups(_uiState.value.groups.map { it.id })
+            reloadAllGroups(_uiState.value.groups.map { it.id }).join()
+            if (uiState.value.isAutoMode) {
+                selectBestServerIfAuto()
+            }
         }
     }
 

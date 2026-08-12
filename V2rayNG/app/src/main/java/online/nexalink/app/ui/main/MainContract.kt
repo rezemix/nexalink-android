@@ -16,7 +16,10 @@ data class MainUiState(
     val locateTarget: LocateTarget? = null,
     val confirmRemove: Boolean = false,
     val doubleColumnDisplay: Boolean = false,
-    val shareQRCodeBitmap: android.graphics.Bitmap? = null
+    val shareQRCodeBitmap: android.graphics.Bitmap? = null,
+    // NEXALINK: авто-режим сам подбирает самый быстрый сервер по последнему
+    // пингу; выключается автоматически, если пользователь выбрал сервер вручную.
+    val isAutoMode: Boolean = true
 )
 
 /**
@@ -46,6 +49,7 @@ sealed interface MainAction {
 
     data class SelectGroup(val groupId: String) : MainAction
     data class SelectServer(val guid: String) : MainAction
+    data class SetAutoMode(val enabled: Boolean) : MainAction
     data class RemoveServer(val guid: String) : MainAction
     data class EditServer(val guid: String, val profile: online.nexalink.app.dto.entities.ProfileItem) : MainAction
     data class Search(val query: String) : MainAction

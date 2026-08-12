@@ -158,6 +158,7 @@ fun MainScreen(
 
                 ServerSelectorCard(
                     serverName = currentServerName,
+                    isAutoMode = uiState.isAutoMode,
                     onClick = { showServerPicker = true },
                 )
                 Spacer(modifier = Modifier.height(24.dp))
@@ -171,8 +172,13 @@ fun MainScreen(
             servers = servers,
             selectedGuid = selectedGuid,
             isTesting = isTesting,
+            isAutoMode = uiState.isAutoMode,
             onSelect = { guid ->
                 onAction(MainAction.SelectServer(guid))
+                showServerPicker = false
+            },
+            onSetAutoMode = {
+                onAction(MainAction.SetAutoMode(true))
                 showServerPicker = false
             },
             onTestAll = { onAction(MainAction.TestRealAllServers) },
@@ -261,6 +267,7 @@ private fun ConnectButton(
 @Composable
 private fun ServerSelectorCard(
     serverName: String,
+    isAutoMode: Boolean,
     onClick: () -> Unit,
 ) {
     Surface(
@@ -285,11 +292,14 @@ private fun ServerSelectorCard(
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(text = flagForServerName(serverName), style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = if (isAutoMode) "⚡" else flagForServerName(serverName),
+                    style = MaterialTheme.typography.titleMedium,
+                )
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Сервер",
+                    text = if (isAutoMode) "Авто" else "Сервер",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
