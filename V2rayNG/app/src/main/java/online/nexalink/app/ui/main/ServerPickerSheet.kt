@@ -227,13 +227,17 @@ private fun ServerPickerRow(
     isSelected: Boolean,
     onClick: () -> Unit,
 ) {
+    val isEmergency = isEmergencyServerName(server.profile.remarks)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .background(
-                if (isSelected) MaterialTheme.colorScheme.secondaryContainer
-                else Color.Transparent
+                when {
+                    isSelected -> MaterialTheme.colorScheme.secondaryContainer
+                    isEmergency -> colorPingRed.copy(alpha = 0.08f)
+                    else -> Color.Transparent
+                }
             )
             .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -243,7 +247,10 @@ private fun ServerPickerRow(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
+                .background(
+                    if (isEmergency) colorPingRed.copy(alpha = 0.16f)
+                    else MaterialTheme.colorScheme.primaryContainer
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Text(text = flagForServerName(server.profile.remarks), style = MaterialTheme.typography.titleMedium)
@@ -253,10 +260,20 @@ private fun ServerPickerRow(
             Text(
                 text = server.profile.remarks,
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                fontWeight = if (isSelected || isEmergency) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (isEmergency) colorPingRed else Color.Unspecified,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (isEmergency) {
+                Text(
+                    text = "Резервный канал через домашний интернет — на случай БПЛА-тревоги",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorPingRed,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
 
         if (server.testDelayString.isNotEmpty()) {
@@ -286,6 +303,15 @@ private fun ServerPickerRow(
         }
     }
 }
+
+/**
+ * NEXALINK: сервер-резерв "на случай БО" (домашний релей через Reality-chain,
+ * см. frontend/dl/pi4-relay-setup.sh) помечается маркером 🆘 в названии —
+ * по этому маркеру подсвечиваем его красным, чтобы визуально отличать от
+ * обычных серверов.
+ */
+fun isEmergencyServerName(remarks: String): Boolean =
+    remarks.contains("🆘") || remarks.contains("Аварийный", ignoreCase = true)
 
 /** Грубое сопоставление названия сервера со страной по ключевым словам в remarks. */
 fun flagForServerName(remarks: String): String {

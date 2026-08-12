@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,6 +58,7 @@ import online.nexalink.app.dto.entities.ServersCache
 import online.nexalink.app.handler.MmkvManager
 import online.nexalink.app.ui.compose.colorConnected
 import online.nexalink.app.ui.compose.colorConnecting
+import online.nexalink.app.ui.compose.colorPingRed
 
 /**
  * Главный экран — простой и дружелюбный, как у крупных VPN-сервисов: одна
@@ -270,12 +272,13 @@ private fun ServerSelectorCard(
     isAutoMode: Boolean,
     onClick: () -> Unit,
 ) {
+    val isEmergency = !isAutoMode && isEmergencyServerName(serverName)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .clickable(onClick = onClick),
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        color = if (isEmergency) colorPingRed.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 2.dp,
     ) {
         Row(
@@ -289,7 +292,10 @@ private fun ServerSelectorCard(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
+                    .background(
+                        if (isEmergency) colorPingRed.copy(alpha = 0.18f)
+                        else MaterialTheme.colorScheme.primaryContainer
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -299,14 +305,15 @@ private fun ServerSelectorCard(
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (isAutoMode) "Авто" else "Сервер",
+                    text = if (isAutoMode) "Авто" else if (isEmergency) "Аварийный режим" else "Сервер",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isEmergency) colorPingRed else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
                     text = serverName,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
+                    color = if (isEmergency) colorPingRed else Color.Unspecified,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
