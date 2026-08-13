@@ -548,16 +548,21 @@ object SettingsManager {
             return
         }
 
-        // Ensure default subscription exists before migration
-        ensureDefaultSubscription()
-
         // Read existing server list from legacy KEY_ANG_CONFIGS
         val oldJson = MmkvManager.readLegacyServerList()
         if (oldJson.isNullOrBlank()) {
-            // No data to migrate, mark as done
+            // NEXALINK: на чистой установке (без старых данных) мигрировать
+            // нечего — раньше здесь всё равно создавался пустой "Default" и
+            // принудительно ставился первым в списке подписок, из-за чего
+            // главный экран после входа в аккаунт показывал именно его
+            // (пустой) вместо только что импортированной подписки NEXALINK.
             MmkvManager.encodeSettings(migrationKey, true)
             return
         }
+
+        // Ensure default subscription exists before migration (только если
+        // реально есть что мигрировать из старого формата)
+        ensureDefaultSubscription()
 
         val guids = JsonUtil.fromJsonSafe(oldJson, Array<String>::class.java) ?: run {
             MmkvManager.encodeSettings(migrationKey, true)
