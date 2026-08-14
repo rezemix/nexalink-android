@@ -29,6 +29,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
@@ -63,6 +64,7 @@ import online.nexalink.app.ui.compose.colorConnected
 import online.nexalink.app.ui.compose.colorConnecting
 import online.nexalink.app.ui.compose.colorPingRed
 import online.nexalink.app.handler.ApkUpdateInstaller
+import online.nexalink.app.handler.UpdateDownloadState
 
 /**
  * Главный экран — простой и дружелюбный, как у крупных VPN-сервисов: одна
@@ -249,6 +251,52 @@ fun MainScreen(
                 }
             },
         )
+    }
+
+    // NEXALINK: видимый прогресс скачивания/установки обновления — раньше
+    // было непонятно, грузится оно или зависло. Диалог без кнопки закрытия
+    // во время скачивания/установки, чтобы не выглядело как "можно нажать
+    // и всё исчезнет, а обновление всё равно идёт".
+    val downloadState by ApkUpdateInstaller.downloadState.collectAsStateWithLifecycle()
+    when (val state = downloadState) {
+        is UpdateDownloadState.Downloading -> {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("Скачивание обновления…") },
+                text = {
+                    Column {
+                        LinearProgressIndicator(
+                            progress = { state.progressPercent / 100f },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text("${state.progressPercent}%")
+                    }
+                },
+                confirmButton = {},
+            )
+        }
+        UpdateDownloadState.Installing -> {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("Установка…") },
+                text = { Text("Открываем установщик, подтвердите установку.") },
+                confirmButton = {},
+            )
+        }
+        is UpdateDownloadState.Failed -> {
+            AlertDialog(
+                onDismissRequest = { ApkUpdateInstaller.dismiss() },
+                title = { Text("Не получилось обновить") },
+                text = { Text(state.message) },
+                confirmButton = {
+                    TextButton(onClick = { ApkUpdateInstaller.dismiss() }) {
+                        Text("ОК")
+                    }
+                },
+            )
+        }
+        UpdateDownloadState.Idle -> {}
     }
 }
 

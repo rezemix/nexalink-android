@@ -3,11 +3,15 @@ package online.nexalink.app.ui.checkupdate
 import android.os.Bundle
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
@@ -19,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import online.nexalink.app.BuildConfig
 import online.nexalink.app.R
@@ -29,6 +34,7 @@ import online.nexalink.app.ui.compose.SettingsMenuItem
 import online.nexalink.app.ui.compose.SettingsSwitchItem
 import online.nexalink.app.ui.compose.VersionInfoBlock
 import online.nexalink.app.handler.ApkUpdateInstaller
+import online.nexalink.app.handler.UpdateDownloadState
 
 class CheckUpdateActivity : BaseComponentActivity() {
 
@@ -120,5 +126,49 @@ fun CheckUpdateScreen(
             },
             containerColor = MaterialTheme.colorScheme.surface
         )
+    }
+
+    // NEXALINK: видимый прогресс скачивания/установки — не даём пользователю
+    // гадать, зависло приложение или просто долго грузится.
+    val downloadState by ApkUpdateInstaller.downloadState.collectAsStateWithLifecycle()
+    when (val state = downloadState) {
+        is UpdateDownloadState.Downloading -> {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("Скачивание обновления…") },
+                text = {
+                    Column {
+                        LinearProgressIndicator(
+                            progress = { state.progressPercent / 100f },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text("${state.progressPercent}%")
+                    }
+                },
+                confirmButton = {},
+            )
+        }
+        UpdateDownloadState.Installing -> {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("Установка…") },
+                text = { Text("Открываем установщик, подтвердите установку.") },
+                confirmButton = {},
+            )
+        }
+        is UpdateDownloadState.Failed -> {
+            AlertDialog(
+                onDismissRequest = { ApkUpdateInstaller.dismiss() },
+                title = { Text("Не получилось обновить") },
+                text = { Text(state.message) },
+                confirmButton = {
+                    TextButton(onClick = { ApkUpdateInstaller.dismiss() }) {
+                        Text("ОК")
+                    }
+                },
+            )
+        }
+        UpdateDownloadState.Idle -> {}
     }
 }

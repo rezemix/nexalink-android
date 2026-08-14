@@ -1,82 +1,126 @@
 package online.nexalink.app.handler
 
 import android.app.DownloadManager
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
 import android.widget.Toast
-import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import online.nexalink.app.AppConfig
 import online.nexalink.app.util.LogUtil
 
 /**
  * NEXALINK: раньше кнопка "Обновить" просто открывала ссылку в браузере —
- * пользователь качал APK сам и потом сам же его ставил. Теперь скачиваем
- * прямо в приложении через системный DownloadManager (фоновая скачка,
- * системный прогресс в шторке уведомлений) и сразу предлагаем установку,
- * как только файл готов.
+ * пользователь качал APK сам и потом сам же его ставил, и было непонятно,
+ * работает ли это вообще (долгая загрузка выглядела как зависание). Теперь
+ * качаем прямо в приложении через системный DownloadManager и опрашиваем
+ * его на предмет прогресса — на экране видно "Скачивание… 42%", затем
+ * "Установка…", а не тишина.
  */
+sealed interface UpdateDownloadState {
+    data object Idle : UpdateDownloadState
+    data class Downloading(val progressPercent: Int) : UpdateDownloadState
+    data object Installing : UpdateDownloadState
+    data class Failed(val message: String) : UpdateDownloadState
+}
+
 object ApkUpdateInstaller {
-    private var receiver: BroadcastReceiver? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val _downloadState = MutableStateFlow<UpdateDownloadState>(UpdateDownloadState.Idle)
+    val downloadState: StateFlow<UpdateDownloadState> = _downloadState.asStateFlow()
+
+    fun dismiss() {
+        _downloadState.value = UpdateDownloadState.Idle
+    }
 
     fun downloadAndInstall(context: Context, downloadUrl: String, versionName: String) {
+        if (_downloadState.value is UpdateDownloadState.Downloading ||
+            _downloadState.value is UpdateDownloadState.Installing
+        ) {
+            return // уже качаем/ставим — второй раз не запускаем
+        }
+
+        val appContext = context.applicationContext
         val fileName = "NEXALINK_$versionName.apk"
 
         val request = DownloadManager.Request(Uri.parse(downloadUrl)).apply {
             setTitle("Обновление NEXALINK")
             setDescription("Скачивание версии $versionName")
             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+            setDestinationInExternalFilesDir(appContext, android.os.Environment.DIRECTORY_DOWNLOADS, fileName)
             setMimeType("application/vnd.android.package-archive")
             setAllowedOverMetered(true)
         }
 
-        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val downloadManager = appContext.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val downloadId = try {
             downloadManager.enqueue(request)
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to enqueue update download", e)
-            Toast.makeText(context, "Не удалось начать скачивание обновления", Toast.LENGTH_SHORT).show()
+            _downloadState.value = UpdateDownloadState.Failed("Не удалось начать скачивание")
             return
         }
 
-        Toast.makeText(context, "Скачивание обновления начато…", Toast.LENGTH_SHORT).show()
+        _downloadState.value = UpdateDownloadState.Downloading(0)
 
-        val appContext = context.applicationContext
-        val newReceiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context, intent: Intent) {
-                val finishedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
-                if (finishedId != downloadId) return
-                try {
-                    appContext.unregisterReceiver(this)
-                } catch (_: Exception) {
-                }
-                receiver = null
+        scope.launch {
+            pollUntilDone(appContext, downloadManager, downloadId)
+        }
+    }
 
-                val uri = try {
-                    downloadManager.getUriForDownloadedFile(downloadId)
-                } catch (e: Exception) {
-                    LogUtil.e(AppConfig.TAG, "getUriForDownloadedFile failed", e)
-                    null
-                }
-                if (uri == null) {
-                    Toast.makeText(appContext, "Не удалось скачать обновление, попробуйте ещё раз", Toast.LENGTH_LONG).show()
+    private suspend fun pollUntilDone(context: Context, downloadManager: DownloadManager, downloadId: Long) {
+        while (true) {
+            val cursor = downloadManager.query(DownloadManager.Query().setFilterById(downloadId))
+            if (cursor == null) {
+                _downloadState.value = UpdateDownloadState.Failed("Не удалось скачать обновление")
+                return
+            }
+            if (!cursor.moveToFirst()) {
+                cursor.close()
+                _downloadState.value = UpdateDownloadState.Failed("Не удалось скачать обновление")
+                return
+            }
+
+            val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+            val bytesSoFar = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+            val totalBytes = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+            cursor.close()
+
+            when (status) {
+                DownloadManager.STATUS_SUCCESSFUL -> {
+                    _downloadState.value = UpdateDownloadState.Installing
+                    val uri = try {
+                        downloadManager.getUriForDownloadedFile(downloadId)
+                    } catch (e: Exception) {
+                        LogUtil.e(AppConfig.TAG, "getUriForDownloadedFile failed", e)
+                        null
+                    }
+                    if (uri == null) {
+                        _downloadState.value = UpdateDownloadState.Failed("Файл скачался, но не открылся")
+                        return
+                    }
+                    promptInstall(context, uri)
+                    _downloadState.value = UpdateDownloadState.Idle
                     return
                 }
-                promptInstall(appContext, uri)
+                DownloadManager.STATUS_FAILED -> {
+                    _downloadState.value = UpdateDownloadState.Failed("Скачивание не удалось, попробуйте ещё раз")
+                    return
+                }
+                else -> {
+                    val progress = if (totalBytes > 0) ((bytesSoFar * 100) / totalBytes).toInt() else 0
+                    _downloadState.value = UpdateDownloadState.Downloading(progress)
+                }
             }
-        }
-        receiver = newReceiver
-        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.registerReceiver(appContext, newReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("UnspecifiedRegisterReceiverFlag")
-            appContext.registerReceiver(newReceiver, filter)
+            delay(350L)
         }
     }
 
