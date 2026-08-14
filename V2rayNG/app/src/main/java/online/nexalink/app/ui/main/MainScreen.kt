@@ -62,7 +62,7 @@ import online.nexalink.app.handler.MmkvManager
 import online.nexalink.app.ui.compose.colorConnected
 import online.nexalink.app.ui.compose.colorConnecting
 import online.nexalink.app.ui.compose.colorPingRed
-import online.nexalink.app.util.Utils
+import online.nexalink.app.handler.ApkUpdateInstaller
 
 /**
  * Главный экран — простой и дружелюбный, как у крупных VPN-сервисов: одна
@@ -210,7 +210,13 @@ fun MainScreen(
             confirmButton = {
                 TextButton(onClick = {
                     onAction(MainAction.DismissUpdateDialog)
-                    availableUpdate.downloadUrl?.let { Utils.openUri(context, it) }
+                    availableUpdate.downloadUrl?.let { url ->
+                        ApkUpdateInstaller.downloadAndInstall(
+                            context,
+                            url,
+                            availableUpdate.latestVersion ?: "new"
+                        )
+                    }
                 }) {
                     Text("Обновить")
                 }

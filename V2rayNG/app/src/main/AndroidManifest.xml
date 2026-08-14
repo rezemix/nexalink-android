@@ -39,6 +39,9 @@
         android:minSdkVersion="34" />
     <!-- <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" /> -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- NEXALINK: фоновая скачка+установка апдейта прямо в приложении (вместо
+         открытия браузера) — нужно разрешение на установку неизвестных источников. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
