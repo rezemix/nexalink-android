@@ -28,7 +28,7 @@ import online.nexalink.app.ui.compose.AppTopBar
 import online.nexalink.app.ui.compose.SettingsMenuItem
 import online.nexalink.app.ui.compose.SettingsSwitchItem
 import online.nexalink.app.ui.compose.VersionInfoBlock
-import online.nexalink.app.util.Utils
+import online.nexalink.app.handler.ApkUpdateInstaller
 
 class CheckUpdateActivity : BaseComponentActivity() {
 
@@ -102,7 +102,13 @@ fun CheckUpdateScreen(
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.dismissUpdateDialog()
-                    result.downloadUrl?.let { Utils.openUri(context, it) }
+                    result.downloadUrl?.let { url ->
+                        ApkUpdateInstaller.downloadAndInstall(
+                            context,
+                            url,
+                            result.latestVersion ?: "new"
+                        )
+                    }
                 }) {
                     Text(stringResource(R.string.update_now))
                 }
