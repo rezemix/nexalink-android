@@ -84,6 +84,9 @@ object AppConfig {
     const val PREF_IS_BOOTED = "pref_is_booted"
     const val PREF_CHECK_UPDATE_PRE_RELEASE = "pref_check_update_pre_release"
     const val PREF_GEO_FILES_SOURCES = "pref_geo_files_sources"
+    // NEXALINK: когда в последний раз тихо обновлялись geosite/geoip в фоне —
+    // чтобы не дёргать GitHub при каждом подключении, а раз в неделю.
+    const val PREF_LAST_GEO_UPDATE_EPOCH = "pref_last_geo_update_epoch"
     const val PREF_USE_HEV_TUNNEL = "pref_use_hev_tunnel_v2"
     const val PREF_HEV_TUNNEL_LOGLEVEL = "pref_hev_tunnel_loglevel"
     const val PREF_HEV_TUNNEL_RW_TIMEOUT = "pref_hev_tunnel_rw_timeout_v2"
@@ -347,9 +350,12 @@ object AppConfig {
         "224.0.0.0/4"
     )
 
+    // NEXALINK: российский источник первый — вся маршрутизация каскадов
+    // построена на geosite:category-ru/geoip:ru, ему точнее размечать .ru.
+    // Первый элемент — дефолт и для ручного скачивания, и для тихого автообновления.
     val GEO_FILES_SOURCES = arrayListOf(
-        "Loyalsoldier/v2ray-rules-dat",
         "runetfreedom/russia-v2ray-rules-dat",
+        "Loyalsoldier/v2ray-rules-dat",
         "Chocolate4U/Iran-v2ray-rules"
     )
 

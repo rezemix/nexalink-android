@@ -16,6 +16,7 @@ import online.nexalink.app.extension.isComplexType
 import online.nexalink.app.extension.matchesPattern
 import online.nexalink.app.extension.moveItem
 import online.nexalink.app.handler.AnnouncementManager
+import online.nexalink.app.handler.GeoFilesUpdater
 import online.nexalink.app.handler.UpdateCheckerManager
 import online.nexalink.app.util.HttpUtil
 import online.nexalink.app.ui.base.BaseViewModel
@@ -122,6 +123,12 @@ class MainViewModel(
                 // только загромождает интерфейс.
                 failedGuidsThisAttempt.clear()
                 updateRunningState(true)
+                // Тихо, раз в неделю, обновляем geosite/geoip через только что
+                // поднятый локальный прокси — пользователю больше не нужно
+                // самому лезть в Настройки → Файлы-ассеты.
+                viewModelScope.launch(ioDispatcher) {
+                    GeoFilesUpdater.maybeUpdate(app)
+                }
             }
 
             is MainServiceEvent.StateStartFailure -> {
