@@ -17,6 +17,7 @@ import online.nexalink.app.extension.matchesPattern
 import online.nexalink.app.extension.moveItem
 import online.nexalink.app.handler.AnnouncementManager
 import online.nexalink.app.handler.UpdateCheckerManager
+import online.nexalink.app.util.HttpUtil
 import online.nexalink.app.ui.base.BaseViewModel
 import online.nexalink.app.util.LogUtil
 import kotlinx.coroutines.CancellationException
@@ -245,6 +246,11 @@ class MainViewModel(
                 _uiState.update { it.copy(activeAnnouncement = null) }
             }
 
+            MainAction.DismissSubscriptionBanner -> {
+                subscriptionBannerDismissed = true
+                _uiState.update { it.copy(subscriptionDaysLeft = null) }
+            }
+
             MainAction.ToggleService,
             MainAction.TestCurrentServer,
             MainAction.ImportQRcode,
@@ -261,14 +267,23 @@ class MainViewModel(
         }
     }
 
+    // NEXALINK: показывался ли уже баннер об окончании подписки в этом
+    // запуске — если пользователь его закрыл, не навязываем снова, пока
+    // приложение не перезапустят.
+    private var subscriptionBannerDismissed = false
+
     // ---------- Initialization ----------
     fun initialize() {
+        // Сразу показываем баннер по последнему известному сроку (если есть),
+        // не дожидаясь свежей синхронизации — так не мигает пусто->занято.
+        refreshSubscriptionExpiryState()
         viewModelScope.launch(preloadDispatcher) {
             try {
                 initialPageReady.await()
                 delay(32L)
                 dataSource.initAssets()
                 dataSource.syncSubscriptions()
+                refreshSubscriptionExpiryState()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -277,6 +292,30 @@ class MainViewModel(
         }
         checkForUpdateSilently()
         checkForAnnouncementSilently()
+    }
+
+    /**
+     * NEXALINK: напоминание об окончании подписки прямо в приложении, не
+     * только по почте. Срок берём из стандартного заголовка
+     * Subscription-Userinfo (см. HttpUtil) — работает независимо от того,
+     * как подписка попала в приложение (вход по аккаунту или ссылка).
+     * Показываем баннер, если осталось ≤5 дней (включая уже истёкшую).
+     */
+    private fun refreshSubscriptionExpiryState() {
+        if (subscriptionBannerDismissed) return
+        val freshEpoch = HttpUtil.lastSubscriptionExpireEpochSeconds
+        if (freshEpoch != null) {
+            dataSource.setSubscriptionExpireEpoch(freshEpoch)
+        }
+        val epoch = freshEpoch ?: dataSource.getSubscriptionExpireEpoch() ?: run {
+            _uiState.update { it.copy(subscriptionDaysLeft = null) }
+            return
+        }
+        val secondsLeft = epoch - System.currentTimeMillis() / 1000
+        val daysLeft = kotlin.math.floor(secondsLeft / 86400.0).toInt()
+        _uiState.update {
+            it.copy(subscriptionDaysLeft = if (daysLeft <= 5) daysLeft else null)
+        }
     }
 
     // NEXALINK: редкие уведомления с сайта (например, "тестируем на боевых нодах") —
@@ -513,6 +552,7 @@ class MainViewModel(
                         else ->
                             toast(dataSource.getString(R.string.title_update_subscription_result, result.configCount, result.successCount, result.failureCount, result.skipCount))
                     }
+                    refreshSubscriptionExpiryState()
                     if (result.configCount > 0) {
                         setupGroupTab(forceRefresh = true)
                         refreshSelectedGuid()
@@ -787,6 +827,7 @@ class MainViewModel(
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Auto-connect subscription sync failed, using cached list", e)
         }
+        refreshSubscriptionExpiryState()
         selectBestServerIfAuto()
     }
 

@@ -130,6 +130,15 @@ class MainRepository(
         MmkvManager.encodeSettings(AppConfig.PREF_LAST_SEEN_ANNOUNCEMENT_ID, id)
     }
 
+    override fun getSubscriptionExpireEpoch(): Long? {
+        val value = MmkvManager.decodeSettingsLong(AppConfig.PREF_SUBSCRIPTION_EXPIRE_EPOCH, -1L)
+        return if (value <= 0L) null else value
+    }
+
+    override fun setSubscriptionExpireEpoch(epochSeconds: Long) {
+        MmkvManager.encodeSettings(AppConfig.PREF_SUBSCRIPTION_EXPIRE_EPOCH, epochSeconds)
+    }
+
     override fun getString(resId: Int): String = app.getString(resId)
 
     override fun getString(resId: Int, vararg formatArgs: Any): String = app.getString(resId, *formatArgs)

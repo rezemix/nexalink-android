@@ -27,7 +27,10 @@ data class MainUiState(
     val availableUpdate: CheckUpdateResult? = null,
     // NEXALINK: активное объявление с сайта (например, "тестируем на боевых нодах"),
     // ещё не показанное этому пользователю — всплывает один раз на id.
-    val activeAnnouncement: AnnouncementInfo? = null
+    val activeAnnouncement: AnnouncementInfo? = null,
+    // NEXALINK: сколько дней осталось до конца подписки — null, если рано
+    // напоминать (либо срок неизвестен), отрицательное — уже закончилась.
+    val subscriptionDaysLeft: Int? = null
 )
 
 /**
@@ -67,6 +70,7 @@ sealed interface MainAction {
     data object DismissQRCodeDialog : MainAction
     data object DismissUpdateDialog : MainAction
     data object DismissAnnouncementDialog : MainAction
+    data object DismissSubscriptionBanner : MainAction
 
     data class ImportBatchConfig(val configText: String) : MainAction
 

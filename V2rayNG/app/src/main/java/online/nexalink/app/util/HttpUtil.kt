@@ -20,6 +20,20 @@ import java.net.URL
 import java.util.concurrent.TimeUnit
 
 object HttpUtil {
+    // NEXALINK: срок действия подписки из стандартного заголовка
+    // Subscription-Userinfo (его отдаёт RemnaWave на каждый запрос ссылки
+    // подписки) — сохраняем при последнем удачном запросе, чтобы показать
+    // напоминание в приложении без отдельного входа по логину/паролю.
+    @Volatile
+    var lastSubscriptionExpireEpochSeconds: Long? = null
+        private set
+
+    private fun captureSubscriptionExpiry(headerValue: String?) {
+        if (headerValue.isNullOrBlank()) return
+        val match = Regex("expire=(\\d+)").find(headerValue) ?: return
+        lastSubscriptionExpireEpochSeconds = match.groupValues[1].toLongOrNull()
+    }
+
 
     /**
      * Converts the domain part of a URL string to its IDN (Punycode, ASCII Compatible Encoding) format.
@@ -202,6 +216,7 @@ object HttpUtil {
                     }
 
                     response.isSuccessful -> {
+                        captureSubscriptionExpiry(response.header("subscription-userinfo"))
                         return response.body?.string() ?: ""
                     }
 

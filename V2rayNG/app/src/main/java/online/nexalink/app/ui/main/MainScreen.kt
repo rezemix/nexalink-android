@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -64,6 +65,7 @@ import online.nexalink.app.ui.compose.colorConnected
 import online.nexalink.app.ui.compose.colorConnecting
 import online.nexalink.app.ui.compose.colorPingRed
 import online.nexalink.app.handler.ApkUpdateInstaller
+import online.nexalink.app.util.Utils
 import online.nexalink.app.handler.UpdateDownloadState
 
 /**
@@ -140,6 +142,13 @@ fun MainScreen(
                     .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                val daysLeft = uiState.subscriptionDaysLeft
+                if (daysLeft != null) {
+                    SubscriptionExpiryBanner(
+                        daysLeft = daysLeft,
+                        onDismiss = { onAction(MainAction.DismissSubscriptionBanner) },
+                    )
+                }
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         ConnectButton(
@@ -373,6 +382,64 @@ private fun ConnectButton(
                 )
             }
         }
+    }
+}
+
+/**
+ * NEXALINK: напоминание об окончании подписки прямо в приложении (раньше
+ * было только письмо на почту). Не блокирует ничего — просто баннер сверху,
+ * закрывается крестиком до следующего запуска приложения.
+ */
+@Composable
+private fun SubscriptionExpiryBanner(
+    daysLeft: Int,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val expired = daysLeft < 0
+    val text = when {
+        expired -> "Подписка закончилась"
+        daysLeft == 0 -> "Подписка заканчивается сегодня"
+        else -> "Подписка заканчивается через $daysLeft ${daysWord(daysLeft)}"
+    }
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp)
+            .clip(RoundedCornerShape(16.dp)),
+        color = colorPingRed.copy(alpha = if (expired) 0.16f else 0.1f),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(text = "⏳", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { Utils.openUri(context, "https://nexalink.online/cabinet") }) {
+                Text("Продлить")
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Default.Close, contentDescription = "Скрыть")
+            }
+        }
+    }
+}
+
+private fun daysWord(n: Int): String {
+    val rem100 = n % 100
+    if (rem100 in 11..19) return "дней"
+    return when (n % 10) {
+        1 -> "день"
+        2, 3, 4 -> "дня"
+        else -> "дней"
     }
 }
 

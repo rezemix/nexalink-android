@@ -141,6 +141,10 @@ object AppConfig {
     // показываются один раз на id объявления, id последнего показанного храним в настройках.
     const val NEXALINK_ANNOUNCEMENT_URL = "https://nexalink.online/api/announcements/active"
     const val PREF_LAST_SEEN_ANNOUNCEMENT_ID = "pref_nx_last_seen_announcement_id"
+    // NEXALINK: срок действия подписки (unix-время) из заголовка Subscription-Userinfo —
+    // сохраняем между запусками, чтобы баннер-напоминание был доступен сразу,
+    // не дожидаясь свежей синхронизации.
+    const val PREF_SUBSCRIPTION_EXPIRE_EPOCH = "pref_nx_subscription_expire_epoch"
     const val APP_ISSUES_URL = "$APP_URL/issues"
     const val APP_WIKI_MODE = "$APP_URL/wiki/Mode"
     const val APP_PRIVACY_POLICY = "https://nexalink.online/privacy"

@@ -30,6 +30,11 @@ interface MainDataSource : Closeable {
     fun getLastSeenAnnouncementId(): Int
     fun setLastSeenAnnouncementId(id: Int)
 
+    // NEXALINK: срок действия подписки (unix-секунды), последний известный —
+    // null, если ещё ни разу не удавалось узнать.
+    fun getSubscriptionExpireEpoch(): Long?
+    fun setSubscriptionExpireEpoch(epochSeconds: Long)
+
     fun getString(resId: Int): String
     fun getString(resId: Int, vararg formatArgs: Any): String
 
