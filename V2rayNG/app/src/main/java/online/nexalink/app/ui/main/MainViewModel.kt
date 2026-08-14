@@ -27,8 +27,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -86,6 +89,14 @@ class MainViewModel(
 
     private val initialPageReady = CompletableDeferred<Unit>()
 
+    // NEXALINK: если в авто-режиме выбранный сервер не смог подключиться
+    // (например, нода мертва) — не бросаем пользователя с ошибкой, тихо
+    // пробуем следующий по скорости, и так до MAX_AUTO_RETRIES раз за один
+    // сеанс подключения.
+    private val failedGuidsThisAttempt = mutableSetOf<String>()
+    private val _retryConnectEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val retryConnectEvents: SharedFlow<Unit> = _retryConnectEvents.asSharedFlow()
+
     // ---------- Service events ----------
     init {
         collectServiceEvents()
@@ -108,20 +119,26 @@ class MainViewModel(
                 // Не показываем тост — большая кнопка на главном экране уже
                 // чётко сообщает о подключении (цвет + текст), доп. уведомление
                 // только загромождает интерфейс.
+                failedGuidsThisAttempt.clear()
                 updateRunningState(true)
             }
 
             is MainServiceEvent.StateStartFailure -> {
+                if (tryNextServerAfterFailure()) return
                 val error = event.errorMessage
                 if (error.isNotBlank()) {
                     toastError(error)
                 } else {
                     toastError(R.string.toast_services_failure)
                 }
+                failedGuidsThisAttempt.clear()
                 updateRunningState(false)
             }
 
-            MainServiceEvent.StateStopSuccess -> updateRunningState(false)
+            MainServiceEvent.StateStopSuccess -> {
+                failedGuidsThisAttempt.clear()
+                updateRunningState(false)
+            }
             is MainServiceEvent.MeasureDelaySuccess -> {
                 _uiState.update { it.copy(statusText = event.content) }
             }
@@ -149,6 +166,33 @@ class MainViewModel(
                 onTestsFinished()
             }
         }
+    }
+
+    /**
+     * NEXALINK: при сбое подключения в авто-режиме тихо пробуем следующий
+     * по скорости сервер (кроме уже проваленных в этой попытке), вместо
+     * того чтобы просто бросить пользователя с ошибкой — "какие сервера
+     * не работают, это не его проблема". В ручном режиме ничего не делаем,
+     * пользователь сам решает, что дальше.
+     */
+    private fun tryNextServerAfterFailure(): Boolean {
+        if (!uiState.value.isAutoMode) return false
+        val failingGuid = uiState.value.selectedGuid ?: return false
+        failedGuidsThisAttempt.add(failingGuid)
+        if (failedGuidsThisAttempt.size > MAX_AUTO_CONNECT_RETRIES) {
+            failedGuidsThisAttempt.clear()
+            return false
+        }
+        val servers = mutableServersForGroup(uiState.value.selectedGroupId).value
+        val next = servers
+            .filter { it.guid !in failedGuidsThisAttempt && it.testDelayString.isNotEmpty() && it.testDelayMillis >= 0L }
+            .minByOrNull { it.testDelayMillis }
+            ?: servers.firstOrNull { it.guid !in failedGuidsThisAttempt }
+            ?: run { failedGuidsThisAttempt.clear(); return false }
+        dataSource.setSelectServer(next.guid)
+        _uiState.update { it.copy(selectedGuid = next.guid) }
+        _retryConnectEvents.tryEmit(Unit)
+        return true
     }
 
     // ---------- Public state accessors ----------
@@ -904,5 +948,11 @@ class MainViewModel(
             }
             throw IllegalArgumentException("Unknown ViewModel class")
         }
+    }
+
+    companion object {
+        // NEXALINK: сколько раз в авто-режиме тихо пробуем другой сервер
+        // после сбоя подключения, прежде чем всё-таки показать ошибку.
+        private const val MAX_AUTO_CONNECT_RETRIES = 2
     }
 }

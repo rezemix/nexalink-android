@@ -96,6 +96,14 @@ class MainActivity : HelperBaseComponentActivity() {
         mainViewModel.onAction(MainAction.Initialize)
 
         checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) {}
+
+        // NEXALINK: авто-режим переключился на другой сервер после сбоя
+        // подключения — реально запускаем сервис заново с новым выбором.
+        lifecycleScope.launch {
+            mainViewModel.retryConnectEvents.collect {
+                startV2Ray()
+            }
+        }
     }
 
     @Composable
