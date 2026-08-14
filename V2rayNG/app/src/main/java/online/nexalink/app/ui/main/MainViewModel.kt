@@ -15,6 +15,7 @@ import online.nexalink.app.dto.entities.SubscriptionCache
 import online.nexalink.app.extension.isComplexType
 import online.nexalink.app.extension.matchesPattern
 import online.nexalink.app.extension.moveItem
+import online.nexalink.app.handler.AnnouncementManager
 import online.nexalink.app.handler.UpdateCheckerManager
 import online.nexalink.app.ui.base.BaseViewModel
 import online.nexalink.app.util.LogUtil
@@ -194,6 +195,11 @@ class MainViewModel(
                 _uiState.update { it.copy(availableUpdate = null) }
             }
 
+            MainAction.DismissAnnouncementDialog -> {
+                uiState.value.activeAnnouncement?.let { dataSource.setLastSeenAnnouncementId(it.id) }
+                _uiState.update { it.copy(activeAnnouncement = null) }
+            }
+
             MainAction.ToggleService,
             MainAction.TestCurrentServer,
             MainAction.ImportQRcode,
@@ -225,6 +231,25 @@ class MainViewModel(
             }
         }
         checkForUpdateSilently()
+        checkForAnnouncementSilently()
+    }
+
+    // NEXALINK: редкие уведомления с сайта (например, "тестируем на боевых нодах") —
+    // показываются один раз на id, дальше не повторяются. Не блокирует основную
+    // инициализацию; при неудаче (нет сети и т.п.) просто молча ничего не показываем.
+    private fun checkForAnnouncementSilently() {
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                val ann = AnnouncementManager.checkForAnnouncement() ?: return@launch
+                if (ann.id > dataSource.getLastSeenAnnouncementId()) {
+                    _uiState.update { it.copy(activeAnnouncement = ann) }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                LogUtil.e(AppConfig.TAG, "Announcement check failed", error)
+            }
+        }
     }
 
     // NEXALINK: автопроверка обновления при каждом запуске — раньше нужно

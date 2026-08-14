@@ -137,6 +137,10 @@ object AppConfig {
     // на свой сайт) — проверка обновлений идёт через свой маленький JSON,
     // а не через APP_API_URL выше.
     const val NEXALINK_UPDATE_CHECK_URL = "https://nexalink.online/dl/version.json"
+    // NEXALINK: редкие уведомления с сайта (например, "тестируем на боевых нодах") —
+    // показываются один раз на id объявления, id последнего показанного храним в настройках.
+    const val NEXALINK_ANNOUNCEMENT_URL = "https://nexalink.online/api/announcements/active"
+    const val PREF_LAST_SEEN_ANNOUNCEMENT_ID = "pref_nx_last_seen_announcement_id"
     const val APP_ISSUES_URL = "$APP_URL/issues"
     const val APP_WIKI_MODE = "$APP_URL/wiki/Mode"
     const val APP_PRIVACY_POLICY = "https://nexalink.online/privacy"

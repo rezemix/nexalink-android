@@ -26,6 +26,10 @@ interface MainDataSource : Closeable {
     fun getAutoServerMode(): Boolean
     fun setAutoServerMode(enabled: Boolean)
 
+    // NEXALINK: id последнего показанного объявления с сайта — чтобы не показывать повторно.
+    fun getLastSeenAnnouncementId(): Int
+    fun setLastSeenAnnouncementId(id: Int)
+
     fun getString(resId: Int): String
     fun getString(resId: Int, vararg formatArgs: Any): String
 

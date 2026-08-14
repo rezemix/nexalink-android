@@ -222,6 +222,28 @@ fun MainScreen(
             },
         )
     }
+
+    // NEXALINK: редкое уведомление с сайта (например, "тестируем на боевых нодах") —
+    // показывается один раз на id объявления, дальше не повторяется.
+    val activeAnnouncement = uiState.activeAnnouncement
+    if (activeAnnouncement != null) {
+        val icon = when (activeAnnouncement.type) {
+            "warning" -> "⚠️"
+            "success" -> "✅"
+            "promo" -> "🎁"
+            else -> "📢"
+        }
+        AlertDialog(
+            onDismissRequest = { onAction(MainAction.DismissAnnouncementDialog) },
+            title = { Text("$icon ${activeAnnouncement.title}") },
+            text = { Text(activeAnnouncement.body) },
+            confirmButton = {
+                TextButton(onClick = { onAction(MainAction.DismissAnnouncementDialog) }) {
+                    Text("Понятно")
+                }
+            },
+        )
+    }
 }
 
 @Composable

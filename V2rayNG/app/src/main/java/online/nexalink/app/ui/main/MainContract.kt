@@ -1,5 +1,6 @@
 package online.nexalink.app.ui.main
 
+import online.nexalink.app.dto.AnnouncementInfo
 import online.nexalink.app.dto.CheckUpdateResult
 import online.nexalink.app.dto.GroupMapItem
 import online.nexalink.app.dto.LocateTarget
@@ -23,7 +24,10 @@ data class MainUiState(
     val isAutoMode: Boolean = true,
     // NEXALINK: результат автопроверки обновления при запуске — если есть
     // новая версия, на главном экране всплывает диалог с кнопкой "Обновить".
-    val availableUpdate: CheckUpdateResult? = null
+    val availableUpdate: CheckUpdateResult? = null,
+    // NEXALINK: активное объявление с сайта (например, "тестируем на боевых нодах"),
+    // ещё не показанное этому пользователю — всплывает один раз на id.
+    val activeAnnouncement: AnnouncementInfo? = null
 )
 
 /**
@@ -62,6 +66,7 @@ sealed interface MainAction {
     data class ShareFullContent(val guid: String) : MainAction
     data object DismissQRCodeDialog : MainAction
     data object DismissUpdateDialog : MainAction
+    data object DismissAnnouncementDialog : MainAction
 
     data class ImportBatchConfig(val configText: String) : MainAction
 

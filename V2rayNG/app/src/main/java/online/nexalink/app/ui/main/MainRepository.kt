@@ -123,6 +123,13 @@ class MainRepository(
         MmkvManager.encodeSettings(AppConfig.PREF_AUTO_SERVER_MODE, enabled)
     }
 
+    override fun getLastSeenAnnouncementId(): Int =
+        MmkvManager.decodeSettingsInt(AppConfig.PREF_LAST_SEEN_ANNOUNCEMENT_ID, 0)
+
+    override fun setLastSeenAnnouncementId(id: Int) {
+        MmkvManager.encodeSettings(AppConfig.PREF_LAST_SEEN_ANNOUNCEMENT_ID, id)
+    }
+
     override fun getString(resId: Int): String = app.getString(resId)
 
     override fun getString(resId: Int, vararg formatArgs: Any): String = app.getString(resId, *formatArgs)
