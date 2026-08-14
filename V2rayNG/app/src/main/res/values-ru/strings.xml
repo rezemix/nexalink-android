@@ -117,6 +117,7 @@
     <string name="toast_malformed_json">Некорректная конфигурация.</string>
     <string name="server_lab_request_host6">Узел (SNI) (необязательно)</string>
     <string name="toast_action_not_allowed">Это действие запрещено</string>
+    <string name="toast_nx_checking_best_server">Проверяем самый быстрый сервер…</string>
     <string name="server_obfs_password">Пароль obfs</string>
     <string name="server_lab_port_hop">Смена портов (переопределяет порт)</string>
     <string name="server_lab_port_hop_interval">Интервал смены портов</string>

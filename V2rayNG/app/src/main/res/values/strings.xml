@@ -117,6 +117,7 @@
     <string name="toast_malformed_json">Invalid configuration.</string>
     <string name="server_lab_request_host6">Host(SNI)(Optional)</string>
     <string name="toast_action_not_allowed">Action not allowed</string>
+    <string name="toast_nx_checking_best_server">Checking for the fastest server…</string>
     <string name="server_obfs_password">Obfs password</string>
     <string name="server_lab_port_hop">Port Hopping(will override the port)</string>
     <string name="server_lab_port_hop_interval">Port Hopping Interval</string>

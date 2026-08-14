@@ -35,6 +35,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.util.concurrent.ConcurrentHashMap
 import java.util.regex.PatternSyntaxException
 
@@ -704,13 +705,45 @@ class MainViewModel(
      * updateSelectedGuid(), которая вызывается при ручном выборе.
      */
     private fun selectBestServerIfAuto() {
-        val best = mutableServersForGroup(uiState.value.selectedGroupId).value
+        val servers = mutableServersForGroup(uiState.value.selectedGroupId).value
+        if (servers.isEmpty()) return
+        val currentStillValid = servers.any { it.guid == uiState.value.selectedGuid }
+        val best = servers
             .filter { it.testDelayString.isNotEmpty() && it.testDelayMillis >= 0L }
             .minByOrNull { it.testDelayMillis }
-            ?: return
-        if (best.guid == uiState.value.selectedGuid) return
-        dataSource.setSelectServer(best.guid)
-        _uiState.update { it.copy(selectedGuid = best.guid) }
+        // NEXALINK: если для выбранного сейчас сервера ещё нет свежего пинга
+        // (например, только что обновили подписку), но сам он пропал из
+        // подписки (мёртвая/удалённая нода) — не зависаем на нём молча,
+        // берём хоть что-то доступное, чтобы подключение не сломалось.
+        val target = best ?: (if (!currentStillValid) servers.first() else null) ?: return
+        if (target.guid == uiState.value.selectedGuid) return
+        dataSource.setSelectServer(target.guid)
+        _uiState.update { it.copy(selectedGuid = target.guid) }
+    }
+
+    /**
+     * NEXALINK: вызывается перед подключением, когда включён авто-режим —
+     * простой пользователь просто жмёт "Включить", без похода в "Подписки"
+     * и без ручной проверки, обновилось ли. Тихо подтягивает свежий список
+     * серверов (чтобы отключённые/мёртвые ноды сразу пропали) и выбирает
+     * самый быстрый из уже известных пингов. Если синк подвис или упал —
+     * не блокируем подключение надолго, просто используем то, что уже
+     * есть на устройстве.
+     */
+    suspend fun prepareAutoConnect() {
+        if (!uiState.value.isAutoMode) return
+        toast(R.string.toast_nx_checking_best_server)
+        try {
+            withTimeout(4000L) {
+                withContext(ioDispatcher) { dataSource.updateConfigViaSubAll() }
+            }
+            reloadAllGroups(uiState.value.groups.map { it.id }).join()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "Auto-connect subscription sync failed, using cached list", e)
+        }
+        selectBestServerIfAuto()
     }
 
     fun removeServerAndRefresh(guid: String) {

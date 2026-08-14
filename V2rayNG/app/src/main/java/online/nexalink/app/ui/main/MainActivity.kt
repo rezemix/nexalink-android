@@ -163,11 +163,20 @@ class MainActivity : HelperBaseComponentActivity() {
     private fun handleFabAction() {
         if (mainViewModel.uiState.value.isRunning) {
             LauncherManager.stopService(this)
-        } else if (SettingsManager.isVpnMode()) {
-            val intent = VpnService.prepare(this)
-            if (intent == null) startV2Ray() else requestVpnPermission.launch(intent)
-        } else {
-            startV2Ray()
+            return
+        }
+        // NEXALINK: в авто-режиме (обычный пользователь) перед подключением
+        // тихо подтягиваем свежий список серверов и выбираем самый быстрый —
+        // не нужно самому идти в "Подписки" и проверять, обновилось ли.
+        // В ручном режиме prepareAutoConnect() ничего не делает мгновенно.
+        lifecycleScope.launch {
+            mainViewModel.prepareAutoConnect()
+            if (SettingsManager.isVpnMode()) {
+                val intent = VpnService.prepare(this@MainActivity)
+                if (intent == null) startV2Ray() else requestVpnPermission.launch(intent)
+            } else {
+                startV2Ray()
+            }
         }
     }
 
