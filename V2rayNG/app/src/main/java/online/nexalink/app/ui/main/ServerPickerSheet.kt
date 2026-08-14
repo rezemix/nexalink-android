@@ -131,7 +131,17 @@ fun ServerPickerSheet(
                     )
                 }
             } else {
-                val autoServerName = servers.firstOrNull { it.guid == selectedGuid }?.profile?.remarks
+                // NEXALINK: подпись у "Авто" должна отражать реально самый быстрый
+                // сервер по текущим пингам в этом списке, а не тот, что был выбран
+                // при последнем подключении — иначе после ре-теста пингов подпись
+                // расходится с цифрами (например, показывает Russia 2 с 107мс, хотя
+                // Finland рядом висит 86мс). Та же логика выбора, что и при реальном
+                // авто-подключении в MainViewModel.selectBestServerIfAuto().
+                val autoServerName = servers
+                    .filter { it.testDelayString.isNotEmpty() && it.testDelayMillis >= 0L }
+                    .minByOrNull { it.testDelayMillis }
+                    ?.profile?.remarks
+                    ?: servers.firstOrNull { it.guid == selectedGuid }?.profile?.remarks
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 24.dp),
