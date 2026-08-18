@@ -681,10 +681,19 @@ object AngConfigManager {
      */
     private fun importUrlAsSubscription(url: String): Int {
         val subscriptions = MmkvManager.decodeSubscriptions()
-        subscriptions.forEach {
-            if (it.subscription.url == url) {
-                return 0
-            }
+        // NEXALINK: раньше тут был return 0, если подписка с таким URL уже
+        // зарегистрирована — тогда повторный переход по диплинку "Открыть в
+        // приложении" (или восстановление данных приложения бэкапом Android
+        // после переустановки — MMKV может пережить удаление+установку) молча
+        // ничего не делал, даже если у уже сохранённой записи список серверов
+        // почему-то пуст. countSub<=0 в вызывающем коде означает, что
+        // updateConfigViaSubAll() не вызовется вообще — пользователь видит
+        // пустое приложение и не может ничего восстановить повторным тапом по
+        // той же ссылке. Подписка идемпотентна по своей природе: переход по
+        // ссылке должен освежать список серверов всегда, не только при самом
+        // первом импорте.
+        if (subscriptions.any { it.subscription.url == url }) {
+            return 1
         }
         val uri = URI(Utils.fixIllegalUrl(url))
         val subItem = SubscriptionItem()
