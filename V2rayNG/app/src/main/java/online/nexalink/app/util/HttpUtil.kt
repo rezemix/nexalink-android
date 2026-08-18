@@ -326,4 +326,51 @@ object HttpUtil {
             false
         }
     }
+
+    /**
+     * NEXALINK: как downloadToFile, но с колбэком прогресса — для скачивания
+     * APK-обновления (см. ApkUpdateInstaller). Идёт через тот же
+     * локальный прокси, что и весь остальной трафик приложения — надёжнее
+     * системного DownloadManager, который не всегда корректно ходит поверх
+     * собственного VpnService-туннеля приложения.
+     */
+    fun downloadFileWithProgress(
+        request: UrlContentRequest,
+        targetFile: File,
+        onProgress: (bytesSoFar: Long, totalBytes: Long) -> Unit,
+    ): Boolean {
+        val url = request.url ?: return false
+        val client = buildOkHttpClient(request.timeout, request.httpPort, request.proxyUsername, request.proxyPassword, followRedirects = true)
+        val requestBuilder = Request.Builder().url(url).get()
+        if (request.httpPort != 0 && !request.proxyUsername.isNullOrBlank() && !request.proxyPassword.isNullOrBlank()) {
+            requestBuilder.header("Proxy-Authorization", Credentials.basic(request.proxyUsername, request.proxyPassword))
+        }
+
+        return try {
+            client.newCall(requestBuilder.build()).execute().use { response ->
+                if (!response.isSuccessful) {
+                    LogUtil.w(AppConfig.TAG, "Failed to download file, code=${response.code}, url=$url")
+                    return false
+                }
+                val body = response.body ?: return false
+                val totalBytes = body.contentLength()
+                var bytesSoFar = 0L
+                body.byteStream().use { input ->
+                    targetFile.outputStream().use { output ->
+                        val buffer = ByteArray(8192)
+                        var read: Int
+                        while (input.read(buffer).also { read = it } != -1) {
+                            output.write(buffer, 0, read)
+                            bytesSoFar += read
+                            onProgress(bytesSoFar, totalBytes)
+                        }
+                    }
+                }
+                true
+            }
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "Failed to download file with progress: $url", e)
+            false
+        }
+    }
 }
