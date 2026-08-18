@@ -89,6 +89,16 @@ class RealPingWorkerService(
 
     private fun startRealPing(guid: String): Long {
         val retFailure = -1L
+        // NEXALINK: у XHTTP+xmux (см. docs/blocking-runbook.md §7) полный
+        // замер через Libv2ray.measureOutboundDelay иногда не проходит —
+        // это одноразовый xray-инстанс с ровно ОДНИМ HTTP-запросом и без
+        // прогрева, похоже, XHTTP не успевает толком встать за этот один
+        // запрос. При этом сервер полностью рабочий — проверено вручную
+        // burst-тестами и через реальное приложение, только этот конкретный
+        // разовый замер капризничает. Не показываем пугающий "-1мс"
+        // пользователю, если хотя бы обычный TCP-коннект до сервера прошёл —
+        // это тоже осмысленный сигнал "сервер жив", а не "сервер сломан".
+        var tcpFallback: Long? = null
 
         val config = MmkvManager.decodeServerConfig(guid) ?: return retFailure
         if (!config.configType.isComplexType()
@@ -104,13 +114,15 @@ class RealPingWorkerService(
             if (tcpTime <= -1L) {
                 return retFailure
             }
+            tcpFallback = tcpTime
         }
 
         val configResult = CoreConfigManager.getV2rayConfig4Speedtest(context, guid)
         if (!configResult.status) {
-            return retFailure
+            return tcpFallback ?: retFailure
         }
-        return CoreNativeManager.measureOutboundDelay(configResult.content, SettingsManager.getDelayTestUrl())
+        val measured = CoreNativeManager.measureOutboundDelay(configResult.content, SettingsManager.getDelayTestUrl())
+        return if (measured > 0) measured else (tcpFallback ?: retFailure)
     }
 
     private fun startTcping(guid: String): Long {
