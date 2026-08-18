@@ -106,6 +106,16 @@ class MainActivity : HelperBaseComponentActivity() {
         }
     }
 
+    // NEXALINK: onCreate() срабатывает только на холодном старте активности —
+    // обычное "открыл приложение" в реальности почти всегда просто onResume
+    // уже живущей активности (переключились из недавних), и тихие проверки
+    // (обновление/объявления/срок подписки) без этого никогда бы не
+    // срабатывали сами, только по ручной кнопке. Троттлинг — внутри ViewModel.
+    override fun onResume() {
+        super.onResume()
+        mainViewModel.onAction(MainAction.RefreshOnForeground)
+    }
+
     @Composable
     override fun ScreenContent() {
         BackHandler { moveTaskToBack(false) }

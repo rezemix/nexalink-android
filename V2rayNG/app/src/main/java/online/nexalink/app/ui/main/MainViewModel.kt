@@ -218,6 +218,7 @@ class MainViewModel(
     fun onAction(action: MainAction) {
         when (action) {
             MainAction.Initialize -> initialize()
+            MainAction.RefreshOnForeground -> refreshOnForeground()
             MainAction.RefreshGroups -> setupGroupTab(forceRefresh = true)
             MainAction.TestAllServers -> testAllRealPing(true)
             MainAction.TestRealAllServers -> testAllRealPing()
@@ -297,6 +298,27 @@ class MainViewModel(
                 LogUtil.e(AppConfig.TAG, "Main background initialization failed", error)
             }
         }
+        refreshOnForeground()
+    }
+
+    private var lastForegroundCheckAtMs = 0L
+
+    /**
+     * NEXALINK: тихие проверки (обновление приложения, объявления, срок
+     * подписки) — раньше жили только в initialize(), который дёргается
+     * исключительно из onCreate() активности. На практике пользователь
+     * почти никогда не убивает приложение целиком — просто переключается на
+     * него из недавних, это onResume() без onCreate(), и проверки не
+     * срабатывали вообще, пока не нажать "проверить обновление" вручную.
+     * Троттлинг — чтобы быстрое многократное переключение между приложениями
+     * не долбило сеть проверками каждый раз.
+     */
+    private fun refreshOnForeground() {
+        val now = System.currentTimeMillis()
+        if (now - lastForegroundCheckAtMs < FOREGROUND_CHECK_MIN_INTERVAL_MS) return
+        lastForegroundCheckAtMs = now
+
+        refreshSubscriptionExpiryState()
         checkForUpdateSilently()
         checkForAnnouncementSilently()
     }
@@ -1002,5 +1024,9 @@ class MainViewModel(
         // NEXALINK: сколько раз в авто-режиме тихо пробуем другой сервер
         // после сбоя подключения, прежде чем всё-таки показать ошибку.
         private const val MAX_AUTO_CONNECT_RETRIES = 2
+
+        // NEXALINK: минимальный интервал между тихими проверками при
+        // возврате в приложение (onResume) — не чаще раза в 10 минут.
+        private const val FOREGROUND_CHECK_MIN_INTERVAL_MS = 10 * 60 * 1000L
     }
 }

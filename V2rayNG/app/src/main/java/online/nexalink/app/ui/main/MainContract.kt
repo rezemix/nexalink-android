@@ -38,6 +38,13 @@ data class MainUiState(
  */
 sealed interface MainAction {
     data object Initialize : MainAction
+    // NEXALINK: initialize() дёргается только из MainActivity.onCreate(), а
+    // это холодный старт активности — если пользователь просто переключился
+    // на уже открытое приложение (onResume без onCreate, самый частый
+    // сценарий обычного использования), проверка обновления/объявлений/срока
+    // подписки не срабатывала вообще, пока не нажать вручную. Этот action
+    // дёргается и из onResume(), с троттлингом внутри ViewModel.
+    data object RefreshOnForeground : MainAction
     data object RefreshGroups : MainAction
     data object ToggleService : MainAction
     data object TestCurrentServer : MainAction
