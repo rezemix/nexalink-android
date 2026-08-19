@@ -281,6 +281,20 @@ class MainViewModel(
     private var subscriptionBannerDismissed = false
 
     // ---------- Initialization ----------
+    // NEXALINK: v1.0.19/1.0.20 добавляли сюда синхронный updateConfigViaSubAll()
+    // на каждом холодном старте — оказалось лишним и опасным: при открытии
+    // приложения и почти сразу нажатой кнопке "Подключить" в авто-режиме этот
+    // вызов гонялся параллельно с уже существующим prepareAutoConnect() (см.
+    // ниже, вызывается из MainActivity.handleFabAction() перед авто-
+    // подключением) — оба одновременно перезаписывали один и тот же список
+    // серверов в MMKV (removeServerViaSubid + batchSaveConfigs), из-за чего
+    // selectedGuid мог оставаться пустым/невалидным и подключение молча не
+    // стартовало вообще ("Проверяем самый быстрый сервер..." → просто
+    // "Отключено"). Убрано полностью v1.0.21 — двух независимых источников
+    // полного refresh той же MMKV-структуры быть не должно. Список серверов
+    // и так освежается: (а) prepareAutoConnect() прямо перед авто-коннектом,
+    // (б) фоновым WorkManager-джобом (SubscriptionUpdater, чинится в
+    // importUrlAsSubscription()/healLegacyAutoUpdateFlag(), см. v1.0.18).
     fun initialize() {
         // Сразу показываем баннер по последнему известному сроку (если есть),
         // не дожидаясь свежей синхронизации — так не мигает пусто->занято.
@@ -296,32 +310,6 @@ class MainViewModel(
                 throw cancelled
             } catch (error: Exception) {
                 LogUtil.e(AppConfig.TAG, "Main background initialization failed", error)
-            }
-        }
-        // NEXALINK: не полагаемся только на фоновый WorkManager-джоб (см.
-        // SubscriptionUpdater) — его первый запуск не гарантированно
-        // мгновенный даже с нулевой задержкой. Список серверов должен быть
-        // свежим сразу при открытии, не "когда-нибудь потом".
-        //
-        // ВАЖНО: этот блок — на отдельном ioDispatcher, НЕ на preloadDispatcher
-        // (тот же, где выше launch и где setupGroupTab() сама планирует свой
-        // preloadJob). Первая попытка (v1.0.19) звала setupGroupTab() изнутри
-        // preloadDispatcher-корутины — вложенный launch на том же
-        // limitedParallelism(1)-диспетчере ломал очередь и приводил к тому,
-        // что подключение к серверам переставало работать вообще. Держать
-        // эти два потока инициализации строго разделёнными.
-        viewModelScope.launch(ioDispatcher) {
-            try {
-                initialPageReady.await()
-                val subUpdateResult = dataSource.updateConfigViaSubAll()
-                if (subUpdateResult.configCount > 0) {
-                    setupGroupTab(forceRefresh = true)
-                    refreshSelectedGuid()
-                }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
-                LogUtil.e(AppConfig.TAG, "Foreground subscription refresh failed", error)
             }
         }
         refreshOnForeground()
