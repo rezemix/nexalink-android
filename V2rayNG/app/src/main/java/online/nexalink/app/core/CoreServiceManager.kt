@@ -83,8 +83,20 @@ object CoreServiceManager {
      */
     fun startCoreLoop(vpnInterface: ParcelFileDescriptor?): Boolean {
         if (isRunning()) {
-            LogUtil.w(AppConfig.TAG, "StartCore-Manager: Core already running")
-            return false
+            // NEXALINK: раньше здесь молча отказывали ("уже запущено") без
+            // единого сообщения в UI - если coreController.isRunning залипал
+            // в true (например, после прерванного/аварийно завершённого
+            // предыдущего запуска core), НИ ОДНО новое подключение не могло
+            // стартовать вообще, ни к какому серверу, до полного перезапуска
+            // процесса приложения (isRunning - поле нативного Go-объекта,
+            // живёт в памяти процесса). Вместо немедленной сдачи - явно
+            // останавливаем зависший цикл и продолжаем нормальный запуск.
+            LogUtil.w(AppConfig.TAG, "StartCore-Manager: Core already running, stopping stale loop before restart")
+            try {
+                coreController.stopLoop()
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop stale loop", e)
+            }
         }
 
         val service = getService()
