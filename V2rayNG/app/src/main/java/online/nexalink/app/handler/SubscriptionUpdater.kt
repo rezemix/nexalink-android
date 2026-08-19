@@ -42,8 +42,6 @@ object SubscriptionUpdater {
                 ExistingPeriodicWorkPolicy.KEEP
             }
 
-        healLegacyAutoUpdateFlag()
-
         MmkvManager.decodeSubscriptions()
             .filter { it.subscription.autoUpdate && it.subscription.url.isNotEmpty() }
             .forEach { sub ->
@@ -94,33 +92,6 @@ object SubscriptionUpdater {
     // -------------------------------------------------------------------------
     // Internal scheduling logic
     // -------------------------------------------------------------------------
-
-    // NEXALINK: подписки, заведённые до фикса importUrlAsSubscription() (диплинк
-    // "Открыть в приложении" не выставлял autoUpdate=true), навсегда застревали
-    // без фонового обновления — новые сервера на сайте появлялись, а в
-    // приложении нет, пока пользователь сам не нажмёт "Обновить подписки".
-    // Чинится не только для новых импортов, но и молча самоисцеляется здесь
-    // на каждом холодном старте (sync() вызывается из MainActivity.onCreate()
-    // и BootReceiver) — у уже установленных приложений тоже появится фон.
-    // Матчим по хосту подписки, не по remarks (юзер мог переименовать).
-    private fun healLegacyAutoUpdateFlag() {
-        MmkvManager.decodeSubscriptions()
-            .filter {
-                !it.subscription.autoUpdate &&
-                    it.subscription.url.contains("sub.nexalink.online")
-            }
-            .forEach { sub ->
-                sub.subscription.autoUpdate = true
-                if (sub.subscription.updateInterval < AppConfig.SUBSCRIPTION_MIN_INTERVAL_MINUTES) {
-                    sub.subscription.updateInterval = 240
-                }
-                MmkvManager.encodeSubscription(sub.guid, sub.subscription)
-                LogUtil.i(
-                    AppConfig.TAG,
-                    "SubscriptionUpdater: healed autoUpdate=false for legacy import [${sub.subscription.remarks}]"
-                )
-            }
-    }
 
     private fun taskName(subId: String) = "${AppConfig.SUBSCRIPTION_UPDATE_TASK_NAME}_$subId"
 

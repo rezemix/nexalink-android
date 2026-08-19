@@ -29,21 +29,8 @@ import online.nexalink.app.util.LogUtil
 import online.nexalink.app.util.QRCodeDecoder
 import online.nexalink.app.util.Utils
 import java.net.URI
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
 
 object AngConfigManager {
-
-    // NEXALINK: несколько независимых мест могут дёрнуть обновление одной и
-    // той же подписки одновременно — prepareAutoConnect() перед авто-
-    // подключением, фоновый WorkManager-джоб (SubscriptionUpdater),
-    // потенциально ручная кнопка "Обновить подписки". updateConfigViaSub()
-    // делает removeServerViaSubid()+batchSaveConfigs() — деструктивная
-    // перезапись списка серверов в MMKV; без защиты два параллельных вызова
-    // гонятся за одни и те же записи и могут оставить selectedGuid
-    // указывающим в никуда (баг v1.0.19/1.0.20 — см. память). Простой
-    // ReentrantLock сериализует любые такие вызовы независимо от источника.
-    private val subscriptionUpdateLock = ReentrantLock()
 
     // Parser mapping for different config types (lazy initialized)
     private val configFmtParsers: Map<String, (String) -> ProfileItem?> by lazy {
@@ -613,11 +600,7 @@ object AngConfigManager {
                 return SubscriptionUpdateResult(failureCount = 1)
             }
 
-            // Сама сеть (выше) безопасна для параллельного выполнения — блокируем
-            // только деструктивную перезапись списка серверов этой подписки.
-            val count = subscriptionUpdateLock.withLock {
-                parseConfigViaSub(configText, it.guid, false)
-            }
+            val count = parseConfigViaSub(configText, it.guid, false)
             if (count > 0) {
                 it.subscription.lastUpdated = System.currentTimeMillis()
                 MmkvManager.encodeSubscription(it.guid, it.subscription)
@@ -716,13 +699,6 @@ object AngConfigManager {
         val subItem = SubscriptionItem()
         subItem.remarks = uri.fragment ?: "import sub"
         subItem.url = url
-        // NEXALINK: без этого подписка, заведённая через диплинк "Открыть в
-        // приложении", никогда не обновляется в фоне (autoUpdate=false по
-        // умолчанию в SubscriptionItem) — пользователь не увидит новый сервер,
-        // пока сам не нажмёт "Обновить подписки". Вход через встроенный экран
-        // логина (NexalinkAccountViewModel) это уже делает — здесь была дыра.
-        subItem.autoUpdate = true
-        subItem.updateInterval = 240 // 4 часа — как profile-update-interval у панели
         MmkvManager.encodeSubscription("", subItem)
         return 1
     }
