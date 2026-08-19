@@ -291,6 +291,19 @@ class MainViewModel(
                 delay(32L)
                 dataSource.initAssets()
                 dataSource.syncSubscriptions()
+                // NEXALINK: не полагаемся только на фоновый WorkManager-джоб
+                // (см. SubscriptionUpdater) — его первый запуск не
+                // гарантированно мгновенный даже с нулевой задержкой (доза/
+                // battery-optimization могут отложить на неопределённое
+                // время, особенно на китайских прошивках). Список серверов
+                // должен быть свежим сразу при открытии приложения, не
+                // "когда-нибудь потом" — тянем подписку синхронно здесь же,
+                // при каждом холодном старте.
+                val subUpdateResult = dataSource.updateConfigViaSubAll()
+                if (subUpdateResult.configCount > 0) {
+                    setupGroupTab(forceRefresh = true)
+                    refreshSelectedGuid()
+                }
                 refreshSubscriptionExpiryState()
             } catch (cancelled: CancellationException) {
                 throw cancelled
