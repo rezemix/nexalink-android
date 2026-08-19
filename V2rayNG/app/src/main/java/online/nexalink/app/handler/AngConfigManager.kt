@@ -699,6 +699,13 @@ object AngConfigManager {
         val subItem = SubscriptionItem()
         subItem.remarks = uri.fragment ?: "import sub"
         subItem.url = url
+        // NEXALINK: без этого подписка, заведённая через диплинк "Открыть в
+        // приложении", никогда не обновляется в фоне (autoUpdate=false по
+        // умолчанию в SubscriptionItem) — пользователь не увидит новый сервер,
+        // пока сам не нажмёт "Обновить подписки". Вход через встроенный экран
+        // логина (NexalinkAccountViewModel) это уже делает — здесь была дыра.
+        subItem.autoUpdate = true
+        subItem.updateInterval = 240 // 4 часа — как profile-update-interval у панели
         MmkvManager.encodeSubscription("", subItem)
         return 1
     }
