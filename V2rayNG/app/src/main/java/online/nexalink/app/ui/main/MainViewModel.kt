@@ -291,24 +291,37 @@ class MainViewModel(
                 delay(32L)
                 dataSource.initAssets()
                 dataSource.syncSubscriptions()
-                // NEXALINK: не полагаемся только на фоновый WorkManager-джоб
-                // (см. SubscriptionUpdater) — его первый запуск не
-                // гарантированно мгновенный даже с нулевой задержкой (доза/
-                // battery-optimization могут отложить на неопределённое
-                // время, особенно на китайских прошивках). Список серверов
-                // должен быть свежим сразу при открытии приложения, не
-                // "когда-нибудь потом" — тянем подписку синхронно здесь же,
-                // при каждом холодном старте.
-                val subUpdateResult = dataSource.updateConfigViaSubAll()
-                if (subUpdateResult.configCount > 0) {
-                    setupGroupTab(forceRefresh = true)
-                    refreshSelectedGuid()
-                }
                 refreshSubscriptionExpiryState()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
                 LogUtil.e(AppConfig.TAG, "Main background initialization failed", error)
+            }
+        }
+        // NEXALINK: не полагаемся только на фоновый WorkManager-джоб (см.
+        // SubscriptionUpdater) — его первый запуск не гарантированно
+        // мгновенный даже с нулевой задержкой. Список серверов должен быть
+        // свежим сразу при открытии, не "когда-нибудь потом".
+        //
+        // ВАЖНО: этот блок — на отдельном ioDispatcher, НЕ на preloadDispatcher
+        // (тот же, где выше launch и где setupGroupTab() сама планирует свой
+        // preloadJob). Первая попытка (v1.0.19) звала setupGroupTab() изнутри
+        // preloadDispatcher-корутины — вложенный launch на том же
+        // limitedParallelism(1)-диспетчере ломал очередь и приводил к тому,
+        // что подключение к серверам переставало работать вообще. Держать
+        // эти два потока инициализации строго разделёнными.
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                initialPageReady.await()
+                val subUpdateResult = dataSource.updateConfigViaSubAll()
+                if (subUpdateResult.configCount > 0) {
+                    setupGroupTab(forceRefresh = true)
+                    refreshSelectedGuid()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                LogUtil.e(AppConfig.TAG, "Foreground subscription refresh failed", error)
             }
         }
         refreshOnForeground()
