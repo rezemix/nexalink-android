@@ -1,5 +1,6 @@
 package online.nexalink.app.core
 
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -48,6 +49,20 @@ object LauncherManager {
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "LauncherManager: ${e.message}", e)
             context.toast(e.message ?: e.javaClass.simpleName)
+            // NEXALINK: диагностика — тост может проскочить незамеченным
+            // (особенно если следом сразу летит другой тост "Запуск служб" —
+            // Android может показать только один из них). Диалог не исчезнет
+            // сам, пока не нажмут ОК — гарантированно увидит точный текст
+            // ошибки. Временная мера для отладки, не меняет логику запуска.
+            try {
+                AlertDialog.Builder(context)
+                    .setTitle("Не удалось подключиться")
+                    .setMessage((e.message ?: e.javaClass.simpleName) + "\n\n" + e.javaClass.name)
+                    .setPositiveButton("OK", null)
+                    .show()
+            } catch (dialogError: Exception) {
+                LogUtil.e(AppConfig.TAG, "LauncherManager: failed to show diagnostic dialog", dialogError)
+            }
         }
     }
 

@@ -141,6 +141,15 @@ class MainViewModel(
                 }
                 failedGuidsThisAttempt.clear()
                 updateRunningState(false)
+                // NEXALINK: диагностика — тост мелькает и его легко пропустить,
+                // логи на современном Android нечитаемы сторонним приложением
+                // (см. память). Оставляем ПОСЛЕДНЮЮ ошибку подключения видимой
+                // прямо под кнопкой (там же, где обычно "Нет соединения"),
+                // пока пользователь не начнёт новую попытку — временная мера,
+                // ничего в логике подключения не меняет, только отображение.
+                if (error.isNotBlank()) {
+                    _uiState.update { it.copy(statusText = "Ошибка: $error") }
+                }
             }
 
             MainServiceEvent.StateStopSuccess -> {

@@ -20,6 +20,7 @@ import online.nexalink.app.core.CoreServiceManager
 import online.nexalink.app.handler.MmkvManager
 import online.nexalink.app.handler.NotificationManager
 import online.nexalink.app.handler.SettingsManager
+import online.nexalink.app.helper.MessageHelper
 import online.nexalink.app.root.RootLanSharing
 import online.nexalink.app.util.LogUtil
 import online.nexalink.app.util.MyContextWrapper
@@ -87,7 +88,15 @@ class CoreVpnService : VpnService(), ServiceControl {
             return START_NOT_STICKY
         }
         LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service command received, systemVpnStart=$isSystemVpnStart")
-        if (!setupVpnService()) {
+        val setupError = setupVpnService()
+        if (setupError != null) {
+            LogUtil.e(AppConfig.TAG, "StartCore-VPN: Setup failed: $setupError")
+            // NEXALINK: раньше здесь сервис молча останавливал себя без единого
+            // сообщения в UI — пользователь видел тост "Запуск служб" и потом
+            // тишину, без объяснения причины (ни ошибки, ни лога, доступного
+            // на телефоне). Теперь причина явно долетает до экрана тем же
+            // путём, что и любая другая ошибка запуска (CoreServiceManager).
+            MessageHelper.sendMsg2UI(this, AppConfig.MSG_STATE_START_FAILURE, setupError)
             unlockStart()
             // Stop service if setup fails to avoid infinite restart loops (START_STICKY)
             stopSelf()
@@ -138,28 +147,34 @@ class CoreVpnService : VpnService(), ServiceControl {
     /**
      * Sets up the VPN service.
      * Prepares the VPN and configures it if preparation is successful.
+     *
+     * NEXALINK: раньше возвращала Boolean, теряя причину сбоя — вызывающий
+     * код (onStartCommand) не мог сообщить пользователю ничего конкретнее
+     * общего "не подключилось". Теперь возвращает null при успехе, иначе
+     * текст причины.
      */
-    private fun setupVpnService(): Boolean {
+    private fun setupVpnService(): String? {
         val prepare = prepare(this)
         if (prepare != null) {
             LogUtil.e(AppConfig.TAG, "StartCore-VPN: Permission not granted")
-            return false
+            return "VPN permission not granted"
         }
 
-        if (configureVpnService() != true) {
-            LogUtil.e(AppConfig.TAG, "StartCore-VPN: Configuration failed")
-            return false
+        val configError = configureVpnService()
+        if (configError != null) {
+            LogUtil.e(AppConfig.TAG, "StartCore-VPN: Configuration failed: $configError")
+            return configError
         }
 
         runTun2socks()
-        return true
+        return null
     }
 
     /**
      * Configures the VPN service.
-     * @return True if the VPN service was configured successfully, false otherwise.
+     * @return null if configured successfully, otherwise the error reason.
      */
-    private fun configureVpnService(): Boolean {
+    private fun configureVpnService(): String? {
         val builder = Builder()
 
         // Configure network settings (addresses, routing and DNS)
@@ -184,12 +199,13 @@ class CoreVpnService : VpnService(), ServiceControl {
         try {
             mInterface = builder.establish()!!
             isRunning = true
-            return true
+            return null
         } catch (e: Exception) {
+            val message = e.message?.takeUnless { it.isBlank() } ?: e.javaClass.simpleName
             LogUtil.e(AppConfig.TAG, "Failed to establish VPN interface", e)
             stopAllService()
+            return message
         }
-        return false
     }
 
     /**
