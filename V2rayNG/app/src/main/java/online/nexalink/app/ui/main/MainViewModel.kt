@@ -99,6 +99,11 @@ class MainViewModel(
     private val _retryConnectEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val retryConnectEvents: SharedFlow<Unit> = _retryConnectEvents.asSharedFlow()
 
+    // NEXALINK: перезапуск уже работающего VPN, когда после синхронизации
+    // подписки выбранный сервер сменился (старый пропал из подписки)
+    private val _restartServiceEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val restartServiceEvents: SharedFlow<Unit> = _restartServiceEvents.asSharedFlow()
+
     // ---------- Service events ----------
     init {
         collectServiceEvents()
@@ -324,12 +329,54 @@ class MainViewModel(
      */
     private fun refreshOnForeground() {
         val now = System.currentTimeMillis()
+        syncSubscriptionsOnForeground()
         if (now - lastForegroundCheckAtMs < FOREGROUND_CHECK_MIN_INTERVAL_MS) return
         lastForegroundCheckAtMs = now
 
         refreshSubscriptionExpiryState()
         checkForUpdateSilently()
         checkForAnnouncementSilently()
+    }
+
+    private var lastSubscriptionSyncAtMs = 0L
+
+    /**
+     * NEXALINK: при каждом открытии приложения тихо обновляем подписку —
+     * пользователь не должен знать, что серверы поменялись. Если выбранный
+     * сервер пропал из подписки, выбираем другой, а работающий VPN
+     * переподключаем на него. Ошибки сети молча игнорируем: остаётся то,
+     * что уже есть на устройстве.
+     */
+    private fun syncSubscriptionsOnForeground() {
+        val now = System.currentTimeMillis()
+        if (now - lastSubscriptionSyncAtMs < SUBSCRIPTION_SYNC_MIN_INTERVAL_MS) return
+        lastSubscriptionSyncAtMs = now
+        viewModelScope.launch {
+            val previousGuid = uiState.value.selectedGuid
+            val result = try {
+                withContext(ioDispatcher) { dataSource.updateConfigViaSubAll(preferDirect = true) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "Foreground subscription sync failed", e)
+                return@launch
+            }
+            if (result.successCount == 0) return@launch
+            reloadAllGroups(uiState.value.groups.map { it.id }).join()
+            refreshSubscriptionExpiryState()
+            if (uiState.value.isAutoMode) {
+                selectBestServerIfAuto()
+            } else {
+                val servers = currentServers()
+                if (servers.isNotEmpty() && servers.none { it.guid == uiState.value.selectedGuid }) {
+                    dataSource.setSelectServer(servers.first().guid)
+                    _uiState.update { it.copy(selectedGuid = servers.first().guid) }
+                }
+            }
+            if (uiState.value.isRunning && uiState.value.selectedGuid != previousGuid) {
+                _restartServiceEvents.tryEmit(Unit)
+            }
+        }
     }
 
     /**
@@ -857,7 +904,7 @@ class MainViewModel(
         toast(R.string.toast_nx_checking_best_server)
         try {
             withTimeout(4000L) {
-                withContext(ioDispatcher) { dataSource.updateConfigViaSubAll() }
+                withContext(ioDispatcher) { dataSource.updateConfigViaSubAll(preferDirect = true) }
             }
             reloadAllGroups(uiState.value.groups.map { it.id }).join()
         } catch (cancelled: CancellationException) {
@@ -1037,5 +1084,6 @@ class MainViewModel(
         // NEXALINK: минимальный интервал между тихими проверками при
         // возврате в приложение (onResume) — не чаще раза в 10 минут.
         private const val FOREGROUND_CHECK_MIN_INTERVAL_MS = 10 * 60 * 1000L
+        private const val SUBSCRIPTION_SYNC_MIN_INTERVAL_MS = 60 * 1000L
     }
 }

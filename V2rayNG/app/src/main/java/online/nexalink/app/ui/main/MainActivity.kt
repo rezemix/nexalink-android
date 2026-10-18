@@ -104,6 +104,11 @@ class MainActivity : HelperBaseComponentActivity() {
                 startV2Ray()
             }
         }
+        lifecycleScope.launch {
+            mainViewModel.restartServiceEvents.collect {
+                restartV2Ray()
+            }
+        }
     }
 
     // NEXALINK: onCreate() срабатывает только на холодном старте активности —

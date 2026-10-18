@@ -62,7 +62,7 @@ interface MainDataSource : Closeable {
         updateUI: Boolean
     ): Pair<Int, Int>
 
-    fun updateConfigViaSubAll(): SubscriptionUpdateResult
+    fun updateConfigViaSubAll(preferDirect: Boolean = false): SubscriptionUpdateResult
     fun updateConfigViaSub(subscriptionCache: SubscriptionCache): SubscriptionUpdateResult
 
     fun shareNonCustomConfigsToClipboard(guids: List<String>): Int

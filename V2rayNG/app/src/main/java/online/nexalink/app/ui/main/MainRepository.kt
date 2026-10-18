@@ -205,8 +205,8 @@ class MainRepository(
         updateUI: Boolean
     ): Pair<Int, Int> = AngConfigManager.importBatchConfig(server, subscriptionId, updateUI)
 
-    override fun updateConfigViaSubAll(): SubscriptionUpdateResult =
-        AngConfigManager.updateConfigViaSubAll()
+    override fun updateConfigViaSubAll(preferDirect: Boolean): SubscriptionUpdateResult =
+        AngConfigManager.updateConfigViaSubAll(preferDirect)
 
     override fun updateConfigViaSub(subscriptionCache: SubscriptionCache): SubscriptionUpdateResult =
         AngConfigManager.updateConfigViaSub(subscriptionCache)

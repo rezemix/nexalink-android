@@ -515,11 +515,11 @@ object AngConfigManager {
      *
      * @return Detailed result of the subscription update operation.
      */
-    fun updateConfigViaSubAll(): SubscriptionUpdateResult {
+    fun updateConfigViaSubAll(preferDirect: Boolean = false): SubscriptionUpdateResult {
         return try {
             val subscriptions = MmkvManager.decodeSubscriptions()
             subscriptions.fold(SubscriptionUpdateResult()) { acc, subscription ->
-                acc + updateConfigViaSub(subscription)
+                acc + updateConfigViaSub(subscription, preferDirect)
             }
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to update config via all subscriptions", e)
@@ -533,7 +533,7 @@ object AngConfigManager {
      * @param it The subscription item.
      * @return Subscription update result.
      */
-    fun updateConfigViaSub(it: SubscriptionCache): SubscriptionUpdateResult {
+    fun updateConfigViaSub(it: SubscriptionCache, preferDirect: Boolean = false): SubscriptionUpdateResult {
         try {
             // Check if disabled
             if (!it.subscription.enabled) {
@@ -563,26 +563,27 @@ object AngConfigManager {
             val proxyUsername = SettingsManager.getSocksUsername()
             val proxyPassword = SettingsManager.getSocksPassword()
 
-            var configText = try {
-                val httpPort = SettingsManager.getHttpPort()
-                HttpUtil.getUrlContentWithUserAgent(
-                    UrlContentRequest(
-                        url = url,
-                        userAgent = userAgent,
-                        requestHeaders = requestHeaders,
-                        forcedHeaders = DeviceUtil.hwidHeaders(),
-                        timeout = 15000,
-                        httpPort = httpPort,
-                        proxyUsername = proxyUsername,
-                        proxyPassword = proxyPassword
+            val viaProxy = {
+                try {
+                    HttpUtil.getUrlContentWithUserAgent(
+                        UrlContentRequest(
+                            url = url,
+                            userAgent = userAgent,
+                            requestHeaders = requestHeaders,
+                            forcedHeaders = DeviceUtil.hwidHeaders(),
+                            timeout = 15000,
+                            httpPort = SettingsManager.getHttpPort(),
+                            proxyUsername = proxyUsername,
+                            proxyPassword = proxyPassword
+                        )
                     )
-                )
-            } catch (e: Exception) {
-                LogUtil.e(AppConfig.ANG_PACKAGE, "Update subscription: proxy not ready or other error", e)
-                ""
+                } catch (e: Exception) {
+                    LogUtil.e(AppConfig.ANG_PACKAGE, "Update subscription: proxy not ready or other error", e)
+                    ""
+                }
             }
-            if (configText.isEmpty()) {
-                configText = try {
+            val direct = {
+                try {
                     HttpUtil.getUrlContentWithUserAgent(
                         UrlContentRequest(
                             url = url,
@@ -595,6 +596,14 @@ object AngConfigManager {
                     LogUtil.e(AppConfig.TAG, "Update subscription: Failed to get URL content with user agent", e)
                     ""
                 }
+            }
+            // NEXALINK: preferDirect — сначала напрямую. Само приложение исключено
+            // из VPN (CoreVpnService), поэтому прямой запрос проходит, даже когда
+            // туннель висит на мёртвом сервере; через прокси такой запрос ждал бы
+            // 15 с и съедал весь таймаут тихой синхронизации.
+            var configText = if (preferDirect) direct() else viaProxy()
+            if (configText.isEmpty()) {
+                configText = if (preferDirect) viaProxy() else direct()
             }
             if (configText.isEmpty()) {
                 return SubscriptionUpdateResult(failureCount = 1)
