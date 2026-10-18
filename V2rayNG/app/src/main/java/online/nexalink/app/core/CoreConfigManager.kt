@@ -2,6 +2,7 @@ package online.nexalink.app.core
 
 import android.content.Context
 import android.text.TextUtils
+import java.io.File
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import online.nexalink.app.AppConfig
@@ -1175,8 +1176,12 @@ object CoreConfigManager {
 
         val rule = JsonUtil.fromJson(JsonUtil.toJson(item), V2rayConfig.RoutingBean.RulesBean::class.java) ?: return
 
-        // Replace specific geoip rules with ext versions
-        rule.ip?.let { ipList ->
+        // Replace specific geoip rules with ext versions.
+        // NEXALINK: geoip-only-cn-private.dat в APK не входит (докачивается
+        // отдельно). Без файла ядро не стартовало вообще на любой свежей
+        // установке — тогда оставляем обычные geoip:cn / geoip:private из geoip.dat.
+        val hasOnlyCnPrivate = File(Utils.userAssetPath(context), AppConfig.GEOIP_ONLY_CN_PRIVATE_DAT).exists()
+        rule.ip?.takeIf { hasOnlyCnPrivate }?.let { ipList ->
             val updatedIpList = ArrayList<String>()
             ipList.forEach { ip ->
                 when (ip) {

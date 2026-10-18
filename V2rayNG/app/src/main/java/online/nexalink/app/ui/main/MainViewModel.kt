@@ -339,6 +339,7 @@ class MainViewModel(
     }
 
     private var lastSubscriptionSyncAtMs = 0L
+    private var subscriptionSyncInFlight = false
 
     /**
      * NEXALINK: при каждом открытии приложения тихо обновляем подписку —
@@ -349,8 +350,8 @@ class MainViewModel(
      */
     private fun syncSubscriptionsOnForeground() {
         val now = System.currentTimeMillis()
-        if (now - lastSubscriptionSyncAtMs < SUBSCRIPTION_SYNC_MIN_INTERVAL_MS) return
-        lastSubscriptionSyncAtMs = now
+        if (subscriptionSyncInFlight || now - lastSubscriptionSyncAtMs < SUBSCRIPTION_SYNC_MIN_INTERVAL_MS) return
+        subscriptionSyncInFlight = true
         viewModelScope.launch {
             val previousGuid = uiState.value.selectedGuid
             val result = try {
@@ -359,10 +360,17 @@ class MainViewModel(
                 throw cancelled
             } catch (e: Exception) {
                 LogUtil.e(AppConfig.TAG, "Foreground subscription sync failed", e)
-                return@launch
+                null
+            } finally {
+                subscriptionSyncInFlight = false
             }
-            if (result.successCount == 0) return@launch
-            reloadAllGroups(uiState.value.groups.map { it.id }).join()
+            // интервал отсчитываем только от успешной синхронизации: иначе подписка,
+            // добавленная сразу после первого открытия (диплинк), не появилась бы минуту
+            if (result == null || result.successCount == 0) return@launch
+            lastSubscriptionSyncAtMs = System.currentTimeMillis()
+            // setupGroupTab, а не reloadAllGroups: на свежей установке список
+            // групп ещё пуст, и новая подписка иначе не появилась бы до перезапуска
+            setupGroupTab(forceRefresh = true).join()
             refreshSubscriptionExpiryState()
             if (uiState.value.isAutoMode) {
                 selectBestServerIfAuto()

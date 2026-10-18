@@ -13,8 +13,8 @@ android {
         applicationId = "online.nexalink.app"
         minSdk = 24
         targetSdk = 37
-        versionCode = 27
-        versionName = "1.0.26"
+        versionCode = 29
+        versionName = "1.0.28"
 
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
         splits {
