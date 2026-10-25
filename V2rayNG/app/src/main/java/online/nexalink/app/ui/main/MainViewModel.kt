@@ -15,8 +15,12 @@ import online.nexalink.app.dto.entities.SubscriptionCache
 import online.nexalink.app.extension.isComplexType
 import online.nexalink.app.extension.matchesPattern
 import online.nexalink.app.extension.moveItem
+import online.nexalink.app.handler.AdListUpdater
 import online.nexalink.app.handler.AnnouncementManager
 import online.nexalink.app.handler.GeoFilesUpdater
+import online.nexalink.app.handler.MmkvManager
+import online.nexalink.app.handler.NexalinkAccountManager
+import online.nexalink.app.handler.SettingsManager
 import online.nexalink.app.handler.UpdateCheckerManager
 import online.nexalink.app.util.HttpUtil
 import online.nexalink.app.ui.base.BaseViewModel
@@ -187,6 +191,20 @@ class MainViewModel(
             is MainServiceEvent.MeasureConfigFinish -> {
                 onTestsFinished()
             }
+
+            is MainServiceEvent.Stats -> _uiState.update {
+                it.copy(
+                    downBps = event.downBps, upBps = event.upBps,
+                    speedHistory = (it.speedHistory + event.downBps).takeLast(SPEED_HISTORY_POINTS),
+                    sessionBytes = event.sessionBytes, todayBytes = event.todayBytes, sessionStartMs = event.sessionStartMs,
+                )
+            }
+
+            is MainServiceEvent.IpInfo -> _uiState.update { it.copy(ipCountry = event.country, ip = event.ip) }
+        }
+        // отключились — убираем живые цифры, чтобы при следующем подключении не мигали старые
+        if (event is MainServiceEvent.StateStopSuccess || event is MainServiceEvent.StateNotRunning) {
+            _uiState.update { it.copy(downBps = 0, upBps = 0, speedHistory = emptyList(), sessionBytes = 0, ipCountry = null, ip = null) }
         }
     }
 
@@ -273,6 +291,8 @@ class MainViewModel(
                 _uiState.update { it.copy(subscriptionDaysLeft = null) }
             }
 
+            MainAction.GetFreeAccess -> getFreeAccess()
+
             MainAction.ToggleService,
             MainAction.TestCurrentServer,
             MainAction.ImportQRcode,
@@ -306,6 +326,9 @@ class MainViewModel(
                 dataSource.initAssets()
                 dataSource.syncSubscriptions()
                 refreshSubscriptionExpiryState()
+                // NEXALINK бесплатный: первая установка — доступ получаем сами,
+                // человеку остаётся только нажать «Подключить».
+                if (refreshNeedsAccess()) getFreeAccess()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -313,6 +336,36 @@ class MainViewModel(
             }
         }
         refreshOnForeground()
+    }
+
+    /** @return true, если на устройстве нет ни подписок, ни серверов. */
+    private fun refreshNeedsAccess(): Boolean {
+        val empty = MmkvManager.decodeSubscriptions().isEmpty() && MmkvManager.decodeAllServerList().isEmpty()
+        _uiState.update { it.copy(needsAccess = empty) }
+        return empty
+    }
+
+    /** NEXALINK бесплатный: личная подписка на эту установку, без регистрации. */
+    private fun getFreeAccess() {
+        if (uiState.value.freeAccessLoading) return
+        _uiState.update { it.copy(freeAccessLoading = true, freeAccessError = null) }
+        viewModelScope.launch {
+            val result = withContext(ioDispatcher) { NexalinkAccountManager.getFreeAccess() }
+            if (result.error != null) {
+                _uiState.update { it.copy(freeAccessLoading = false, freeAccessError = result.error) }
+                return@launch
+            }
+            lastSubscriptionSyncAtMs = System.currentTimeMillis()
+            setupGroupTab(forceRefresh = true).join()
+            refreshSubscriptionExpiryState()
+            if (uiState.value.isAutoMode) selectBestServerIfAuto()
+            val servers = currentServers()
+            if (servers.isNotEmpty() && servers.none { it.guid == uiState.value.selectedGuid }) {
+                dataSource.setSelectServer(servers.first().guid)
+                _uiState.update { it.copy(selectedGuid = servers.first().guid) }
+            }
+            _uiState.update { it.copy(freeAccessLoading = false, needsAccess = false) }
+        }
     }
 
     private var lastForegroundCheckAtMs = 0L
@@ -329,6 +382,14 @@ class MainViewModel(
      */
     private fun refreshOnForeground() {
         val now = System.currentTimeMillis()
+        // подписку могли добавить по ссылке (UrlSchemeActivity) или удалить вручную
+        if (!uiState.value.freeAccessLoading) refreshNeedsAccess()
+        // переключатели на «Мой доступ»: метки на главном и переподключение, чтобы правила применились
+        _uiState.update { it.copy(adBlockOn = SettingsManager.isAdBlockEnabled(), ruDirectOn = SettingsManager.isRuDirectEnabled()) }
+        if (SettingsManager.consumeRoutingChanged() && uiState.value.isRunning) {
+            LogUtil.i(AppConfig.TAG, "Restart VPN: routing toggles changed")
+            _restartServiceEvents.tryEmit(Unit)
+        }
         syncSubscriptionsOnForeground()
         if (now - lastForegroundCheckAtMs < FOREGROUND_CHECK_MIN_INTERVAL_MS) return
         lastForegroundCheckAtMs = now
@@ -336,6 +397,8 @@ class MainViewModel(
         refreshSubscriptionExpiryState()
         checkForUpdateSilently()
         checkForAnnouncementSilently()
+        // расширенный список рекламы — раз в сутки, тихо (применится при следующем подключении)
+        viewModelScope.launch(ioDispatcher) { AdListUpdater.updateIfNeeded(getApplication()) }
     }
 
     private var lastSubscriptionSyncAtMs = 0L
@@ -353,7 +416,8 @@ class MainViewModel(
         if (subscriptionSyncInFlight || now - lastSubscriptionSyncAtMs < SUBSCRIPTION_SYNC_MIN_INTERVAL_MS) return
         subscriptionSyncInFlight = true
         viewModelScope.launch {
-            val previousGuid = uiState.value.selectedGuid
+            // при обновлении подписки серверы пересоздаются с новыми guid — сравниваем сами настройки сервера
+            val previousProfile = uiState.value.selectedGuid?.let { MmkvManager.decodeServerConfig(it)?.duplicateIdentity() }
             val result = try {
                 withContext(ioDispatcher) { dataSource.updateConfigViaSubAll(preferDirect = true) }
             } catch (cancelled: CancellationException) {
@@ -371,17 +435,24 @@ class MainViewModel(
             // setupGroupTab, а не reloadAllGroups: на свежей установке список
             // групп ещё пуст, и новая подписка иначе не появилась бы до перезапуска
             setupGroupTab(forceRefresh = true).join()
+            // выбранный сервер уже переназначен на новый guid в AngConfigManager — подхватываем его
+            _uiState.update { it.copy(selectedGuid = dataSource.getSelectServer()) }
             refreshSubscriptionExpiryState()
-            if (uiState.value.isAutoMode) {
+            // при работающем VPN «Авто» не перескакивает на другой сервер из-за колебаний пинга —
+            // только если текущий пропал из подписки (иначе каждое возвращение на главный рвало соединение)
+            if (uiState.value.isAutoMode && !(uiState.value.isRunning && currentServers().any { it.guid == uiState.value.selectedGuid })) {
                 selectBestServerIfAuto()
-            } else {
+            } else if (!uiState.value.isAutoMode) {
                 val servers = currentServers()
                 if (servers.isNotEmpty() && servers.none { it.guid == uiState.value.selectedGuid }) {
                     dataSource.setSelectServer(servers.first().guid)
                     _uiState.update { it.copy(selectedGuid = servers.first().guid) }
                 }
             }
-            if (uiState.value.isRunning && uiState.value.selectedGuid != previousGuid) {
+            val newProfile = uiState.value.selectedGuid?.let { MmkvManager.decodeServerConfig(it)?.duplicateIdentity() }
+            LogUtil.i(AppConfig.TAG, "Foreground sync ok: ${result.successCount}, server changed=${newProfile != previousProfile}")
+            if (uiState.value.isRunning && newProfile != previousProfile) {
+                LogUtil.i(AppConfig.TAG, "Restart VPN: selected server changed after sync")
                 _restartServiceEvents.tryEmit(Unit)
             }
         }
@@ -1088,6 +1159,9 @@ class MainViewModel(
         // NEXALINK: сколько раз в авто-режиме тихо пробуем другой сервер
         // после сбоя подключения, прежде чем всё-таки показать ошибку.
         private const val MAX_AUTO_CONNECT_RETRIES = 2
+
+        // NEXALINK: столбиков в графике скорости на главном (раз в 2 секунды → ~40 с)
+        private const val SPEED_HISTORY_POINTS = 20
 
         // NEXALINK: минимальный интервал между тихими проверками при
         // возврате в приложение (onResume) — не чаще раза в 10 минут.

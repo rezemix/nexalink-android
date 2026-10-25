@@ -52,12 +52,138 @@ object SettingsManager {
      * @param context The application context.
      */
     private fun initRoutingRulesets(context: Context) {
+        migrateDomainStrategy()
         val exist = MmkvManager.decodeRoutingRulesets()
         if (exist.isNullOrEmpty()) {
-            val rulesetList = getPresetRoutingRulesets(context)
+            val rulesetList = getPresetRoutingRulesets(context, DEFAULT_ROUTING)
             MmkvManager.encodeRoutingRulesets(rulesetList)
+        } else {
+            migrateChineseRoutingToRussia(context, exist)
+            migrateAddAdBlockRule(context)
         }
     }
+
+    /**
+     * NEXALINK: при AsIs правило geoip:ru срабатывает только для соединений по голому IP — сайты
+     * на российских IP с не-.ru доменом (playerok.com и т.п.) шли через VPN и не открывались.
+     * IPIfNonMatch: домен не совпал ни с одним правилом — резолвим и проверяем по IP.
+     */
+    private fun migrateDomainStrategy() {
+        if (MmkvManager.decodeSettingsBool(KEY_DOMAIN_STRATEGY_MIGRATED, false)) return
+        MmkvManager.encodeSettings(KEY_DOMAIN_STRATEGY_MIGRATED, true)
+        val current = MmkvManager.decodeSettingsString(AppConfig.PREF_ROUTING_DOMAIN_STRATEGY)
+        if (current.isNullOrEmpty() || current == "AsIs") {
+            MmkvManager.encodeSettings(AppConfig.PREF_ROUTING_DOMAIN_STRATEGY, "IPIfNonMatch")
+            LogUtil.i(AppConfig.TAG, "Routing: domainStrategy → IPIfNonMatch")
+        }
+    }
+
+    /**
+     * NEXALINK: российский пресет без правила блокировки рекламы (ранние сборки 1.0.29)
+     * заменяем на текущий — с ним. Если пользователь правила менял, не трогаем.
+     */
+    private fun migrateAddAdBlockRule(context: Context) {
+        if (MmkvManager.decodeSettingsBool(KEY_ADS_RULE_MIGRATED, false)) return
+        MmkvManager.encodeSettings(KEY_ADS_RULE_MIGRATED, true)
+        val exist = MmkvManager.decodeRoutingRulesets() ?: return
+        val current = getPresetRoutingRulesets(context, DEFAULT_ROUTING) ?: return
+        val withoutAds = current.filterNot { it.domain?.contains(AppConfig.GEOSITE_ADS_ALL) == true }
+        if (JsonUtil.toJson(exist) == JsonUtil.toJson(withoutAds)) {
+            MmkvManager.encodeRoutingRulesets(current)
+            LogUtil.i(AppConfig.TAG, "Routing: добавлено правило блокировки рекламы")
+        }
+    }
+
+    /**
+     * NEXALINK: до 1.0.29 по умолчанию ставился китайский пресет из v2rayNG — российские
+     * сайты шли через VPN (медленнее, банки/Госуслуги не любят зарубежные IP). Один раз
+     * меняем его на российский, но только если пользователь сам правила не трогал.
+     */
+    private fun migrateChineseRoutingToRussia(context: Context, exist: MutableList<RulesetItem>) {
+        if (MmkvManager.decodeSettingsBool(KEY_ROUTING_RU_MIGRATED, false)) return
+        MmkvManager.encodeSettings(KEY_ROUTING_RU_MIGRATED, true)
+        val chinese = getPresetRoutingRulesets(context, RoutingType.WHITE) ?: return
+        if (JsonUtil.toJson(exist) == JsonUtil.toJson(chinese)) {
+            MmkvManager.encodeRoutingRulesets(getPresetRoutingRulesets(context, DEFAULT_ROUTING))
+            LogUtil.i(AppConfig.TAG, "Routing: китайский пресет заменён на российский")
+        }
+    }
+
+    // --- NEXALINK: переключатели на экране «Мой доступ» ---
+
+    private const val GEOSITE_RU = "geosite:category-ru"
+    private const val GEOIP_RU = "geoip:ru"
+    private const val KEY_ROUTING_CHANGED = "nexalink_routing_changed"
+
+    private fun isAdRule(r: RulesetItem) = r.domain?.contains(AppConfig.GEOSITE_ADS_ALL) == true
+    private fun isRuRule(r: RulesetItem) =
+        r.outboundTag == TAG_DIRECT && (r.domain?.contains(GEOSITE_RU) == true || r.ip?.contains(GEOIP_RU) == true)
+
+    fun isAdBlockEnabled(): Boolean = MmkvManager.decodeRoutingRulesets()?.any { it.enabled && isAdRule(it) } == true
+    fun isRuDirectEnabled(): Boolean = MmkvManager.decodeRoutingRulesets()?.any { it.enabled && isRuRule(it) } == true
+
+    fun setAdBlock(enabled: Boolean) {
+        val list = MmkvManager.decodeRoutingRulesets() ?: mutableListOf()
+        val rules = list.filter(::isAdRule)
+        if (rules.isEmpty() && enabled) {
+            // правила нет (пользователь удалил или свой пресет) — ставим перед правилами «напрямую»
+            val at = list.indexOfFirst { it.outboundTag == TAG_DIRECT && it.protocol == null }.let { if (it < 0) 0 else it }
+            list.add(at, RulesetItem(remarks = "Блокировать рекламу и трекеры", outboundTag = AppConfig.TAG_BLOCKED,
+                domain = listOf(AppConfig.GEOSITE_ADS_ALL)))
+        }
+        rules.forEach { it.enabled = enabled }
+        MmkvManager.encodeRoutingRulesets(list)
+        MmkvManager.encodeSettings(KEY_ROUTING_CHANGED, true)
+    }
+
+    fun setRuDirect(enabled: Boolean) {
+        val list = MmkvManager.decodeRoutingRulesets() ?: return
+        list.filter(::isRuRule).forEach { it.enabled = enabled }
+        MmkvManager.encodeRoutingRulesets(list)
+        MmkvManager.encodeSettings(KEY_ROUTING_CHANGED, true)
+    }
+
+    /**
+     * Госуслуги и банки: сами проверяют, включён ли на телефоне VPN, и ругаются/не пускают —
+     * правилами маршрутизации это не обойти, поэтому при «Российские сайты — без VPN»
+     * эти приложения целиком идут мимо VPN. Неустановленные пакеты VPN-сервис пропускает.
+     */
+    private val RU_DIRECT_APPS = listOf(
+        "ru.rostel",                              // Госуслуги
+        "ru.gosuslugi.goskey",                    // Госключ
+        "ru.fns.lkfl",                            // Налоги ФЛ
+        "com.gnivts.selfemployed",                // Мой налог
+        "ru.sberbankmobile",                      // СберБанк
+        "com.idamob.tinkoff.android",             // Т-Банк
+        "ru.vtb24.mobilebanking.android",         // ВТБ
+        "ru.alfabank.mobile.android",             // Альфа-Банк
+        "ru.gazprombank.android.mobilebank.app",  // Газпромбанк
+        "ru.raiffeisennews",                      // Райффайзен
+        "ru.letobank.Prometheus",                 // Почта Банк
+        "ru.rshb.dbo",                            // Россельхозбанк
+        "logo.com.mbanking",                      // ПСБ
+        "com.openbank",                           // Открытие
+        "ru.sovcomcard.halva.v1",                 // Халва / Совкомбанк
+        "ru.mts.money",                           // МТС Банк
+        "ru.ozon.fintech.finance",                // Ozon Банк
+        "ru.yoo.money",                           // ЮMoney
+        "ru.nspk.mirpay",                         // Mir Pay
+    )
+
+    /** Приложения, которые VPN пропускает мимо себя (пусто, если «Российские сайты — без VPN» выключено). */
+    fun ruDirectApps(): List<String> = if (isRuDirectEnabled()) RU_DIRECT_APPS else emptyList()
+
+    /** Правила поменяли на экране «Мой доступ» — работающий VPN надо переподключить. Сбрасывает флаг. */
+    fun consumeRoutingChanged(): Boolean {
+        val changed = MmkvManager.decodeSettingsBool(KEY_ROUTING_CHANGED, false)
+        if (changed) MmkvManager.encodeSettings(KEY_ROUTING_CHANGED, false)
+        return changed
+    }
+
+    private val DEFAULT_ROUTING = RoutingType.WHITE_RUSSIA
+    private const val KEY_ROUTING_RU_MIGRATED = "nexalink_routing_ru_migrated"
+    private const val KEY_ADS_RULE_MIGRATED = "nexalink_ads_rule_migrated"
+    private const val KEY_DOMAIN_STRATEGY_MIGRATED = "nexalink_domain_strategy_migrated"
 
     /**
      * Get preset routing rulesets.
@@ -489,6 +615,10 @@ object SettingsManager {
         ensureDefaultValue(AppConfig.PREF_REMOTE_DNS, AppConfig.DNS_PROXY)
         ensureDefaultValue(AppConfig.PREF_DOMESTIC_DNS, AppConfig.DNS_DIRECT)
         ensureDefaultValue(AppConfig.PREF_DELAY_TEST_URL, AppConfig.DELAY_TEST_URL)
+        // NEXALINK: старый адрес по умолчанию отдавал IPv6 — меняем на IPv4, если пользователь его не правил
+        if (MmkvManager.decodeSettingsString(AppConfig.PREF_IP_API_URL) == "https://api.ip.sb/geoip") {
+            MmkvManager.encodeSettings(AppConfig.PREF_IP_API_URL, AppConfig.IP_API_URL)
+        }
         ensureDefaultValue(AppConfig.PREF_IP_API_URL, AppConfig.IP_API_URL)
         ensureDefaultValue(AppConfig.PREF_HEV_TUNNEL_RW_TIMEOUT, AppConfig.HEVTUN_RW_TIMEOUT)
         ensureDefaultValue(AppConfig.PREF_MUX_CONCURRENCY, "8")

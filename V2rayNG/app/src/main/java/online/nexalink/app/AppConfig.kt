@@ -162,7 +162,8 @@ object AppConfig {
     const val OBSERVATORY_LEAST_LOAD_TIMEOUT = "30s"
 
     //    const val IP_API_URL = "https://speed.cloudflare.com/meta"
-    const val IP_API_URL = "https://api.ip.sb/geoip"
+    // NEXALINK: только IPv4 — у нод есть IPv6, и длинный v6-адрес на главном ничего не говорит пользователю
+    const val IP_API_URL = "https://api-ipv4.ip.sb/geoip"
 
     /** DNS server addresses. */
     const val DNS_PROXY = "https://cloudflare-dns.com/dns-query"
@@ -178,6 +179,11 @@ object AppConfig {
     const val GEOIP_DAT = "geoip.dat"
     const val GEOIP_ONLY_CN_PRIVATE_DAT = "geoip-only-cn-private.dat"
     const val GEOIP_ONLY_CN_PRIVATE_URL = "$GITHUB_RAW_URL/Loyalsoldier/geoip/release/$GEOIP_ONLY_CN_PRIVATE_DAT"
+
+    /** NEXALINK: блокировка рекламы — встроенная категория + расширенный список с панели (AdGuard + RU AdList). */
+    const val GEOSITE_ADS_ALL = "geosite:category-ads-all"
+    const val NEXALINK_ADS_DAT = "nexalink-ads.dat"
+    const val NEXALINK_ADS_URL = "https://sub.nexalink.online/api/public/$NEXALINK_ADS_DAT"
 
     /** Ports and addresses for various services. */
     const val PORT_LOCAL_DNS = "10853"
@@ -205,6 +211,9 @@ object AppConfig {
     const val MSG_MEASURE_CONFIG_SUCCESS = 72
     const val MSG_MEASURE_CONFIG_NOTIFY = 73
     const val MSG_MEASURE_CONFIG_FINISH = 74
+    // NEXALINK: живая статистика и IP для главного экрана
+    const val MSG_STATS = 81
+    const val MSG_IP_INFO = 82
 
     const val MSG_SUB_UPDATE_START = 8
     const val MSG_SUB_UPDATE_CANCEL = 81

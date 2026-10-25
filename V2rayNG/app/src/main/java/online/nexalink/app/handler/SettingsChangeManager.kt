@@ -27,6 +27,7 @@ object SettingsChangeManager {
      * Triggers service restart if the key is not UI-only, and always refreshes UI tabs.
      */
     fun notifySettingChanged(key: String) {
+        android.util.Log.i(AppConfig.TAG, "Setting changed: $key")
         if (key !in uiOnlyKeys) {
             makeRestartService()
         }

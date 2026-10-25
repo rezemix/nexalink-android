@@ -66,6 +66,15 @@ class MainRepository(
                     safeIntent.getStringExtra("content")
                 )
 
+                AppConfig.MSG_STATS -> safeIntent.getStringExtra("content")?.split("|")
+                    ?.mapNotNull { it.toLongOrNull() }?.takeIf { it.size >= 5 }
+                    ?.let { MainServiceEvent.Stats(it[0], it[1], it[2], it[3], it[4]) }
+
+                AppConfig.MSG_IP_INFO -> safeIntent.getStringExtra("content")?.let { c ->
+                    // формат SpeedtestManager.getRemoteIPInfo(): "(FI) 31.76.56.37"
+                    Regex("^\\((\\w+)\\)\\s*(\\S+)").find(c)?.let { MainServiceEvent.IpInfo(it.groupValues[1], it.groupValues[2]) }
+                }
+
                 else -> null
             }
             event?.let { _mainServiceEvent.tryEmit(it) }

@@ -32,7 +32,7 @@ object NotificationManager {
     private const val NOTIFICATION_PENDING_INTENT_STOP_V2RAY = 1
     private const val NOTIFICATION_PENDING_INTENT_RESTART_V2RAY = 2
     private const val NOTIFICATION_ICON_THRESHOLD = 3000
-    private const val QUERY_INTERVAL_MS = 3000L
+    private const val QUERY_INTERVAL_MS = 2000L
 
     private var lastQueryTime = 0L
     private var mBuilder: NotificationCompat.Builder? = null
@@ -44,7 +44,8 @@ object NotificationManager {
      * @param currentConfig The current profile configuration.
      */
     fun startSpeedNotification() {
-        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED) != true) return
+        // NEXALINK: опрос работает всегда — его данные нужны главному экрану и виджетам
+        // (TrafficStatsHub); в уведомление скорость пишем, только если это включено.
         if (speedNotificationJob != null || CoreServiceManager.isRunning() == false) return
 
         var lastZeroSpeed = false
@@ -93,7 +94,12 @@ object NotificationManager {
 
         mBuilder = NotificationCompat.Builder(service, channelId)
             .setSmallIcon(R.drawable.ic_stat_name)
-            .setContentTitle(currentConfig?.remarks ?: service.getString(R.string.app_name))
+            // NEXALINK: «Подключено · Германия», фирменный зелёный, скорость — в тексте (TrafficStatsHub)
+            .setContentTitle(currentConfig?.remarks?.let { "Подключено · ${online.nexalink.app.ui.main.serverDisplayName(it)}" }
+                ?: service.getString(R.string.app_name))
+            .setContentText("Нажмите, чтобы открыть NEXALINK")
+            .setColor(0xFF1D9A54.toInt())
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setShowWhen(false)
@@ -101,12 +107,12 @@ object NotificationManager {
             .setContentIntent(contentPendingIntent)
             .addAction(
                 R.drawable.ic_delete_24dp,
-                service.getString(R.string.notification_action_stop_v2ray),
+                "Отключить",
                 stopV2RayPendingIntent
             )
             .addAction(
                 R.drawable.ic_restore_24dp,
-                service.getString(R.string.title_service_restart),
+                "Переподключить",
                 restartV2RayPendingIntent
             )
 
@@ -261,7 +267,23 @@ object NotificationManager {
         val proxyTotal = proxyUplink + proxyDownlink
         val directTotal = directUplink + directDownlink
         val zeroSpeed = proxyTotal + directTotal == 0L
+        getService()?.let { service ->
+            TrafficStatsHub.onTick(
+                service,
+                upBps = (proxyUplink + directUplink) / sinceLastQueryInSeconds,
+                downBps = (proxyDownlink + directDownlink) / sinceLastQueryInSeconds,
+                deltaBytes = proxyTotal + directTotal,
+            )
+        }
+        // NEXALINK: компактная строка вместо таблицы proxy/direct — «↓ 24,6 Мбит/с · ↑ 1,2 Мбит/с · 312 МБ»
         if (!zeroSpeed || !lastZeroSpeed) {
+            val down = (proxyDownlink + directDownlink) / sinceLastQueryInSeconds
+            val up = (proxyUplink + directUplink) / sinceLastQueryInSeconds
+            mBuilder?.setStyle(null)
+            mBuilder?.setContentText("↓ ${TrafficStatsHub.formatSpeed(down)}  ·  ↑ ${TrafficStatsHub.formatSpeed(up)}  ·  ${TrafficStatsHub.sessionText()}")
+            getNotificationManager()?.notify(NOTIFICATION_ID, mBuilder?.build())
+        }
+        if (false) {
             val text = StringBuilder()
             appendSpeedString(
                 text, AppConfig.TAG_PROXY,

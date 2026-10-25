@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -181,53 +182,61 @@ private fun AutoServerRow(
     resolvedServerName: String?,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .background(
-                if (isSelected) MaterialTheme.colorScheme.secondaryContainer
-                else Color.Transparent
-            )
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = "⚡", style = MaterialTheme.typography.titleMedium)
-        }
-
+    PickerRowFrame(isSelected = isSelected, onClick = onClick) {
+        FlagCircle("⚡")
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Авто (рекомендуем)",
+                text = "Авто",
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = resolvedServerName ?: "Подберём самый быстрый сервер",
+                text = resolvedServerName?.let { "Сейчас: ${serverDisplayName(it)}" } ?: "Самый быстрый сервер",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        if (isSelected) SelectedCheck()
+    }
+}
 
-        if (isSelected) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.size(18.dp),
-            )
-        }
+/** Строка шторки: выбранная — на сером фоне со скруглением, как в макете. */
+@Composable
+private fun PickerRowFrame(isSelected: Boolean, onClick: () -> Unit, tint: Color = Color.Transparent, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (isSelected) MaterialTheme.colorScheme.surfaceContainer else tint)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        content = content,
+    )
+}
+
+@Composable
+private fun FlagCircle(text: String, background: Color = MaterialTheme.colorScheme.surfaceContainer) {
+    Box(
+        modifier = Modifier.size(40.dp).clip(CircleShape).background(background),
+        contentAlignment = Alignment.Center,
+    ) { Text(text = text, style = MaterialTheme.typography.titleMedium) }
+}
+
+@Composable
+private fun SelectedCheck() {
+    Box(
+        modifier = Modifier.size(22.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(imageVector = Icons.Filled.Check, contentDescription = "Выбран",
+            tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(14.dp))
     }
 }
 
@@ -238,79 +247,41 @@ private fun ServerPickerRow(
     onClick: () -> Unit,
 ) {
     val isEmergency = isEmergencyServerName(server.profile.remarks)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .background(
-                when {
-                    isSelected -> MaterialTheme.colorScheme.secondaryContainer
-                    isEmergency -> colorPingRed.copy(alpha = 0.08f)
-                    else -> Color.Transparent
-                }
-            )
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(
-                    if (isEmergency) colorPingRed.copy(alpha = 0.16f)
-                    else MaterialTheme.colorScheme.primaryContainer
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = flagForServerName(server.profile.remarks), style = MaterialTheme.typography.titleMedium)
-        }
-
+    PickerRowFrame(isSelected = isSelected, onClick = onClick,
+        tint = if (isEmergency) colorPingRed.copy(alpha = 0.08f) else Color.Transparent) {
+        FlagCircle(
+            flagForServerName(server.profile.remarks),
+            if (isEmergency) colorPingRed.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceContainer,
+        )
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = server.profile.remarks,
+                text = serverDisplayName(server.profile.remarks),
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (isSelected || isEmergency) FontWeight.SemiBold else FontWeight.Normal,
+                fontWeight = FontWeight.SemiBold,
                 color = if (isEmergency) colorPingRed else Color.Unspecified,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (isEmergency) {
+            val sub = when {
+                isEmergency -> "Резервный канал через домашний интернет"
+                server.testDelayString.isNotEmpty() && server.testDelayMillis < 0L -> "Не отвечает"
+                server.testDelayString.isNotEmpty() -> server.testDelayString
+                else -> null
+            }
+            if (sub != null) {
                 Text(
-                    text = "Резервный канал через домашний интернет — на случай БПЛА-тревоги",
+                    text = sub,
                     style = MaterialTheme.typography.bodySmall,
-                    color = colorPingRed,
+                    color = when {
+                        isEmergency || server.testDelayMillis < 0L -> colorPingRed
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
-
-        if (server.testDelayString.isNotEmpty()) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(99.dp))
-                    .background(
-                        (if (server.testDelayMillis < 0L) colorPingRed else colorPing).copy(alpha = 0.12f)
-                    )
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-            ) {
-                Text(
-                    text = server.testDelayString,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (server.testDelayMillis < 0L) colorPingRed else colorPing,
-                )
-            }
-        }
-
-        if (isSelected) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.size(18.dp),
-            )
-        }
+        if (isSelected) SelectedCheck()
     }
 }
 
@@ -323,8 +294,29 @@ private fun ServerPickerRow(
 fun isEmergencyServerName(remarks: String): Boolean =
     remarks.contains("🆘") || remarks.contains("Аварийный", ignoreCase = true)
 
+/**
+ * Название без флагов в начале ("🇷🇺→🇫🇮 Москва" → "Москва → Финляндия", "🇫🇮 Финляндия 1" → "Финляндия 1") —
+ * флаг и так в кружке слева.
+ */
+fun serverDisplayName(remarks: String): String {
+    val flagRe = Regex("^[\\s\\x{1F1E6}-\\x{1F1FF}→\\-]+")
+    val head = flagRe.find(remarks)?.value.orEmpty()
+    val name = remarks.removePrefix(head).trim().ifEmpty { remarks }
+    // цепочка «вход → выход»: показываем, куда в итоге идёт трафик
+    if ("→" in head) {
+        val flags = Regex("[\\x{1F1E6}-\\x{1F1FF}]{2}").findAll(head).map { it.value }.toList()
+        val exit = when (flags.lastOrNull()) {
+            "🇫🇮" -> "Финляндия"; "🇩🇪" -> "Германия"; "🇳🇱" -> "Нидерланды"; else -> null
+        }
+        if (exit != null && !name.contains(exit)) return "$name → $exit"
+    }
+    return name
+}
+
 /** Грубое сопоставление названия сервера со страной по ключевым словам в remarks. */
 fun flagForServerName(remarks: String): String {
+    // флаг уже в начале названия (так их отдаёт панель) — берём первый
+    Regex("^\\s*([\\x{1F1E6}-\\x{1F1FF}]{2})").find(remarks)?.let { return it.groupValues[1] }
     val name = remarks.lowercase()
     return when {
         "russia" in name || "росси" in name -> "🇷🇺"

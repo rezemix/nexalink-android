@@ -20,6 +20,7 @@ import online.nexalink.app.enums.BrowserDialerMode
 import online.nexalink.app.extension.isNotNullEmpty
 import online.nexalink.app.handler.MmkvManager
 import online.nexalink.app.handler.NotificationManager
+import online.nexalink.app.handler.TrafficStatsHub
 import online.nexalink.app.handler.SettingsManager
 import online.nexalink.app.handler.SpeedtestManager
 import online.nexalink.app.helper.MessageHelper
@@ -185,7 +186,17 @@ object CoreServiceManager {
         if (!isReload) {
             MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
         }
+        // NEXALINK: статистика для главного экрана/виджетов и «Ваш IP для сайтов»
+        TrafficStatsHub.onConnected(service, currentConfig?.remarks)
         NotificationManager.startSpeedNotification()
+        CoroutineScope(Dispatchers.IO).launch {
+            for (attempt in 1..3) {
+                kotlinx.coroutines.delay(1500L * attempt)
+                val info = SpeedtestManager.getRemoteIPInfo() ?: continue
+                MessageHelper.sendMsg2UI(service, AppConfig.MSG_IP_INFO, info)
+                break
+            }
+        }
         LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core started successfully")
     }
 

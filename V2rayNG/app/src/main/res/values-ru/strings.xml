@@ -318,7 +318,7 @@
     <string name="title_del_invalid_config">Удалить нерабочие профили</string>
     <string name="title_export_all">Экспорт профилей в буфер обмена</string>
     <string name="title_sub_setting">Подписки</string>
-    <string name="nexalink_account_title">Аккаунт NEXALINK</string>
+    <string name="nexalink_account_title">Мой доступ</string>
     <string name="sub_setting_remarks">Название</string>
     <string name="sub_setting_url">URL (необязательно)</string>
     <string name="sub_setting_user_agent" translatable="false">User Agent</string>
@@ -542,4 +542,7 @@
     <string name="connection_test_empty_message">подробности отсутствуют</string>
     <string name="value_unknown">неизвестно</string>
 
+    <string name="widget_switch_description">Включить или выключить VPN</string>
+    <string name="widget_wide_description">Статус, сервер и скорость</string>
+    <string name="nexalink_invite_title">Пригласить друзей</string>
 </resources>

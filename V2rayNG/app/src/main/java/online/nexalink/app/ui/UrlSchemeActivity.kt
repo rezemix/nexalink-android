@@ -9,7 +9,9 @@ import online.nexalink.app.AppConfig
 import online.nexalink.app.R
 import online.nexalink.app.extension.toast
 import online.nexalink.app.extension.toastError
+import online.nexalink.app.extension.toastSuccess
 import online.nexalink.app.handler.AngConfigManager
+import online.nexalink.app.handler.NexalinkAccountManager
 import online.nexalink.app.ui.base.BaseComponentActivity
 import online.nexalink.app.ui.main.MainActivity
 import online.nexalink.app.util.LogUtil
@@ -41,7 +43,16 @@ class UrlSchemeActivity : BaseComponentActivity() {
                         "install-sub" -> {
                             val uri: Uri? = intent.data
                             val shareUrl = uri?.getQueryParameter("url").orEmpty()
-                            handledAsync = parseUri(shareUrl, uri?.fragment)
+                            handledAsync = if (NexalinkAccountManager.isNexalinkSubUrl(Uri.decode(shareUrl))) {
+                                importNexalinkSubscription(Uri.decode(shareUrl))
+                            } else {
+                                parseUri(shareUrl, uri?.fragment)
+                            }
+                        }
+
+                        // App Link: тап по https://sub.nexalink.online/<id> в браузере/мессенджере
+                        "sub.nexalink.online" -> {
+                            handledAsync = importNexalinkSubscription(data.toString())
                         }
 
                         else -> {
@@ -75,6 +86,26 @@ class UrlSchemeActivity : BaseComponentActivity() {
     private fun finishToMain() {
         startActivity(Intent(this, MainActivity::class.java))
         finish()
+    }
+
+    /**
+     * NEXALINK: ссылка нашей подписки — импортируем её как основную подписку "NEXALINK"
+     * (заменяет выданную автоматически), без логина и пароля.
+     * @return true — импорт запущен асинхронно и сам закроет activity.
+     */
+    private fun importNexalinkSubscription(subUrl: String): Boolean {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val result = NexalinkAccountManager.importSubscription(subUrl)
+            withContext(Dispatchers.Main) {
+                if (result.configCount > 0) {
+                    toastSuccess("Доступ подключён. Серверов: ${result.configCount}")
+                } else {
+                    toast(R.string.import_subscription_failure)
+                }
+                finishToMain()
+            }
+        }
+        return true
     }
 
     /** @return true, если импорт запущен асинхронно (и сам закроет activity по завершении). */

@@ -204,6 +204,18 @@
                 <data android:scheme="nexalink" />
                 <data android:host="install-sub" />
             </intent-filter>
+            <!-- NEXALINK: App Links — тап по ссылке подписки https://sub.nexalink.online/<id>
+                 открывает приложение, оно импортирует подписку и само входит в аккаунт.
+                 Подтверждение домена: https://sub.nexalink.online/.well-known/assetlinks.json -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.BROWSABLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:scheme="https" />
+                <data android:host="sub.nexalink.online" />
+            </intent-filter>
         </activity>
         <activity
             android:name=".ui.checkupdate.CheckUpdateActivity"
@@ -291,6 +303,18 @@
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="${applicationId}.action.widget.click" />
                 <action android:name="${applicationId}.action.activity" />
+            </intent-filter>
+        </receiver>
+        <!-- NEXALINK: виджет 4×1 (статус, сервер, скорость) -->
+        <receiver
+            android:name=".receiver.WideWidgetProvider"
+            android:exported="true"
+            android:process=":RunSoLibV2RayDaemon">
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/app_widget_wide" />
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
         </receiver>
         <receiver

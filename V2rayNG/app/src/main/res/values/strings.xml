@@ -318,7 +318,7 @@
     <string name="title_del_invalid_config">Delete invalid config</string>
     <string name="title_export_all">Export configs to clipboard</string>
     <string name="title_sub_setting">Subscription group setting</string>
-    <string name="nexalink_account_title">NEXALINK Account</string>
+    <string name="nexalink_account_title">My access</string>
     <string name="sub_setting_remarks">remarks</string>
     <string name="sub_setting_url">Optional URL</string>
     <string name="sub_setting_user_agent" translatable="false">User Agent</string>
@@ -542,4 +542,7 @@
     <string name="connection_test_empty_message">no details available</string>
     <string name="value_unknown">unknown</string>
 
+    <string name="widget_switch_description">Turn VPN on or off</string>
+    <string name="widget_wide_description">Status, server and speed</string>
+    <string name="nexalink_invite_title">Invite friends</string>
 </resources>

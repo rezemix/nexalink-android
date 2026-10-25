@@ -10,4 +10,7 @@ sealed class MainServiceEvent {
     data object MeasureConfigSuccess : MainServiceEvent()
     data class MeasureConfigNotify(val progress: String) : MainServiceEvent()
     data class MeasureConfigFinish(val finishedCount: String?) : MainServiceEvent()
+    // NEXALINK: живая статистика и IP для главного экрана
+    data class Stats(val downBps: Long, val upBps: Long, val sessionBytes: Long, val todayBytes: Long, val sessionStartMs: Long) : MainServiceEvent()
+    data class IpInfo(val country: String, val ip: String) : MainServiceEvent()
 }

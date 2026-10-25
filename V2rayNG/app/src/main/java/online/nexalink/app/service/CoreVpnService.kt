@@ -283,10 +283,20 @@ class CoreVpnService : VpnService(), ServiceControl {
      */
     private fun configurePerAppProxy(builder: Builder) {
         val selfPackageName = BuildConfig.APPLICATION_ID
+        // NEXALINK: Госуслуги и банки — мимо VPN (см. SettingsManager.ruDirectApps)
+        val ruApps = SettingsManager.ruDirectApps()
+        val disallow: (String) -> Unit = { pkg ->
+            try {
+                builder.addDisallowedApplication(pkg)
+            } catch (_: PackageManager.NameNotFoundException) {
+                // приложение не установлено
+            }
+        }
 
         // If per-app proxy is not enabled, disallow the VPN service's own package and return
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PER_APP_PROXY) == false) {
             builder.addDisallowedApplication(selfPackageName)
+            ruApps.forEach(disallow)
             return
         }
 
@@ -294,12 +304,15 @@ class CoreVpnService : VpnService(), ServiceControl {
         val apps = MmkvManager.decodeSettingsStringSet(AppConfig.PREF_PER_APP_PROXY_SET)
         if (apps.isNullOrEmpty()) {
             builder.addDisallowedApplication(selfPackageName)
+            ruApps.forEach(disallow)
             return
         }
 
         val bypassApps = MmkvManager.decodeSettingsBool(AppConfig.PREF_BYPASS_APPS)
         // Handle the VPN service's own package according to the mode
         if (bypassApps) apps.add(selfPackageName) else apps.remove(selfPackageName)
+        // в режиме «только выбранные через VPN» выбор пользователя не трогаем
+        if (bypassApps) apps.addAll(ruApps)
 
         apps.forEach {
             try {

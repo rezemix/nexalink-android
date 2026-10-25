@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,6 +27,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -54,6 +57,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -110,9 +114,13 @@ fun MainScreen(
         }
     }
 
+    // приветствие с получением доступа — пока на устройстве нет ни одного сервера
+    val showWelcome = uiState.needsAccess && servers.isEmpty()
+
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var showServerPicker by remember { mutableStateOf(false) }
+    var showInvite by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalNavigationDrawer(
@@ -122,24 +130,28 @@ fun MainScreen(
                 drawerState = drawerState,
                 onNavigate = { route ->
                     scope.launch { drawerState.close() }
-                    onNavigate(route)
+                    if (route == MainDestination.Invite) showInvite = true else onNavigate(route)
                 }
             )
         }
     ) {
         Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
             topBar = {
-                HomeTopBar(
-                    onMenuClick = { scope.launch { drawerState.open() } },
-                    onAccountClick = { onNavigate(MainDestination.NexalinkAccount) },
-                )
+                // на экране первого запуска шапки нет — как в макете
+                if (!showWelcome) {
+                    HomeTopBar(
+                        onMenuClick = { scope.launch { drawerState.open() } },
+                        onAccountClick = { onNavigate(MainDestination.NexalinkAccount) },
+                    )
+                }
             }
         ) { innerPadding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .padding(horizontal = 24.dp),
+                    .padding(horizontal = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 val daysLeft = uiState.subscriptionDaysLeft
@@ -149,39 +161,72 @@ fun MainScreen(
                         onDismiss = { onAction(MainAction.DismissSubscriptionBanner) },
                     )
                 }
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        ConnectButton(
-                            isRunning = isRunning,
-                            onClick = { onAction(MainAction.ToggleService) },
-                        )
-                        Spacer(modifier = Modifier.height(28.dp))
-                        Text(
-                            text = if (isRunning) "Подключено" else "Отключено",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (isRunning) colorConnected else MaterialTheme.colorScheme.onSurface,
-                        )
-                        if (statusText.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(6.dp))
+                if (showWelcome) {
+                    FreeAccessContent(
+                        isLoading = uiState.freeAccessLoading,
+                        error = uiState.freeAccessError,
+                        onGetAccess = { onAction(MainAction.GetFreeAccess) },
+                        onPasteLink = { onAction(MainAction.ImportClipboard) },
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            ConnectButton(
+                                isRunning = isRunning,
+                                onClick = { onAction(MainAction.ToggleService) },
+                            )
+                            Spacer(modifier = Modifier.height(if (isRunning) 18.dp else 26.dp))
                             Text(
-                                text = statusText,
+                                text = if (isRunning) "Подключено" else "Не подключено",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isRunning) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface,
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            if (isRunning) ConnectionTimer(uiState.sessionStartMs) else Text(
+                                text = "Нажмите, чтобы включить",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            // результат проверки соединения (нажатие на статус в старых версиях) — если есть
+                            if (isRunning && statusText.isNotBlank() && !statusText.startsWith("Соединено")) {
+                                Text(
+                                    text = statusText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (isRunning) {
+                                Spacer(modifier = Modifier.height(14.dp))
+                                StatusPills(adBlock = uiState.adBlockOn, ruDirect = uiState.ruDirectOn)
+                            }
                         }
                     }
+                    if (isRunning) {
+                        LiveStatsCards(uiState)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    val selected = servers.firstOrNull { it.guid == selectedGuid }
+                    // сервер и IP выхода — одной карточкой; страна — по серверу (у цепочки — страна выхода)
+                    ServerSelectorCard(
+                        serverName = currentServerName,
+                        isAutoMode = uiState.isAutoMode,
+                        ping = selected?.takeIf { it.testDelayMillis > 0L }?.testDelayString,
+                        exitIp = if (isRunning) uiState.ip else null,
+                        exitCountry = if (isRunning) exitCountryCode(currentServerName) ?: uiState.ipCountry else null,
+                        isRunning = isRunning,
+                        onClick = { showServerPicker = true },
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    ShareButton(onClick = { showInvite = true })
                 }
-
-                ServerSelectorCard(
-                    serverName = currentServerName,
-                    isAutoMode = uiState.isAutoMode,
-                    onClick = { showServerPicker = true },
-                )
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
             }
         }
     }
+
+    if (showInvite) online.nexalink.app.ui.share.InviteSheet(onDismiss = { showInvite = false })
 
     if (showServerPicker) {
         ServerPickerSheet(
@@ -244,21 +289,11 @@ fun MainScreen(
     // показывается один раз на id объявления, дальше не повторяется.
     val activeAnnouncement = uiState.activeAnnouncement
     if (activeAnnouncement != null) {
-        val icon = when (activeAnnouncement.type) {
-            "warning" -> "⚠️"
-            "success" -> "✅"
-            "promo" -> "🎁"
-            else -> "📢"
-        }
-        AlertDialog(
-            onDismissRequest = { onAction(MainAction.DismissAnnouncementDialog) },
-            title = { Text("$icon ${activeAnnouncement.title}") },
-            text = { Text(activeAnnouncement.body) },
-            confirmButton = {
-                TextButton(onClick = { onAction(MainAction.DismissAnnouncementDialog) }) {
-                    Text("Понятно")
-                }
-            },
+        AnnouncementDialog(
+            type = activeAnnouncement.type,
+            title = activeAnnouncement.title,
+            body = activeAnnouncement.body,
+            onDismiss = { onAction(MainAction.DismissAnnouncementDialog) },
         )
     }
 
@@ -323,65 +358,204 @@ private fun HomeTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         IconButton(onClick = onMenuClick) {
-            Icon(painter = painterResource(R.drawable.ic_menu_24dp), contentDescription = null)
+            Icon(painter = painterResource(R.drawable.ic_menu_24dp), contentDescription = "Меню")
         }
-        Text(
-            text = "NEXALINK",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.foundation.Image(
+                painter = painterResource(R.drawable.nexalink_logo),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp).clip(RoundedCornerShape(6.dp)),
+            )
+            Text(
+                text = "NEXALINK",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = androidx.compose.ui.unit.TextUnit(0.6f, androidx.compose.ui.unit.TextUnitType.Sp),
+            )
+        }
         IconButton(onClick = onAccountClick) {
-            Icon(painter = painterResource(R.drawable.ic_lock_24dp), contentDescription = null)
+            Icon(painter = painterResource(R.drawable.ic_key_24dp), contentDescription = "Мой доступ")
         }
     }
 }
 
+/** Кнопка питания как на сайте: тёмно-синяя → зелёная с мягким ореолом, когда подключено. */
 @Composable
 private fun ConnectButton(
     isRunning: Boolean,
     onClick: () -> Unit,
 ) {
-    val targetColor = if (isRunning) colorConnected else colorConnecting
-    val buttonColor by animateColorAsState(targetValue = targetColor, label = "connectButtonColor")
-
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (isRunning) 1.12f else 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1600, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "pulseScale",
+    val color by animateColorAsState(
+        targetValue = if (isRunning) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
+        label = "connectButtonColor",
     )
-
-    Box(contentAlignment = Alignment.Center) {
-        if (isRunning) {
-            Box(
-                modifier = Modifier
-                    .size(220.dp)
-                    .scale(pulseScale)
-                    .clip(CircleShape)
-                    .background(buttonColor.copy(alpha = 0.16f))
-            )
-        }
+    val ring by animateColorAsState(
+        targetValue = if (isRunning) MaterialTheme.colorScheme.tertiaryContainer else Color.Transparent,
+        label = "connectRing",
+    )
+    val iconTint = if (isRunning) Color.White else MaterialTheme.colorScheme.onPrimary
+    val outer by androidx.compose.animation.core.animateDpAsState(if (isRunning) 156.dp else 196.dp, label = "outer")
+    val inner by androidx.compose.animation.core.animateDpAsState(if (isRunning) 128.dp else 164.dp, label = "inner")
+    Box(
+        modifier = Modifier
+            .size(outer)
+            .clip(CircleShape)
+            .background(ring),
+        contentAlignment = Alignment.Center,
+    ) {
         Surface(
             modifier = Modifier
-                .size(180.dp)
+                .size(inner)
                 .clip(CircleShape)
                 .clickable(onClick = onClick),
-            color = buttonColor,
-            shadowElevation = 12.dp,
+            color = color,
+            shadowElevation = 10.dp,
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    painter = painterResource(if (isRunning) R.drawable.ic_stop_24dp else R.drawable.ic_play_24dp),
-                    contentDescription = null,
-                    tint = androidx.compose.ui.graphics.Color.White,
-                    modifier = Modifier.size(64.dp),
+                    painter = painterResource(R.drawable.ic_power_24dp),
+                    contentDescription = if (isRunning) "Отключить" else "Подключить",
+                    tint = iconTint,
+                    modifier = Modifier.size(if (isRunning) 48.dp else 60.dp),
                 )
             }
         }
+    }
+}
+
+/** Время с момента подключения (с момента, как экран увидел «Подключено»). */
+@Composable
+private fun ConnectionTimer(sessionStartMs: Long) {
+    // время начала — из процесса VPN, чтобы не сбрасывалось при возврате в приложение
+    val fallback = remember { System.currentTimeMillis() }
+    val start = if (sessionStartMs > 0) sessionStartMs else fallback
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(1000)
+            now = System.currentTimeMillis()
+        }
+    }
+    val s = (now - start) / 1000
+    Text(
+        text = "%02d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun StatusPills(adBlock: Boolean, ruDirect: Boolean) {
+    androidx.compose.foundation.layout.FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        if (adBlock) StatusPill("Реклама блокируется")
+        if (ruDirect) StatusPill("Российские сайты — без VPN")
+    }
+}
+
+/** «Скорость» (с графиком последних ~40 с) и «Трафик» — из TrafficStatsHub процесса VPN. */
+@Composable
+private fun LiveStatsCards(state: MainUiState) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        StatCard(title = "Скорость", modifier = Modifier.weight(1f)) {
+            Text("↓ " + speedText(state.downBps), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text("↑ " + speedText(state.upBps), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            SpeedBars(state.speedHistory)
+        }
+        StatCard(title = "Трафик", modifier = Modifier.weight(1f)) {
+            Text(bytesText(state.sessionBytes), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text("за подключение", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.height(6.dp))
+            Text("Сегодня: " + bytesText(state.todayBytes), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun StatCard(title: String, modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Surface(
+        modifier = modifier.height(104.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.background,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Text(title.uppercase(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.height(4.dp))
+            content()
+        }
+    }
+}
+
+@Composable
+private fun SpeedBars(history: List<Long>) {
+    val max = (history.maxOrNull() ?: 0L).coerceAtLeast(1L)
+    val color = MaterialTheme.colorScheme.tertiary
+    Row(
+        modifier = Modifier.fillMaxWidth().height(22.dp).padding(top = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        repeat(SPEED_BARS) { i ->
+            val v = history.getOrNull(history.size - SPEED_BARS + i) ?: 0L
+            Box(
+                modifier = Modifier.weight(1f)
+                    .fillMaxHeight((v.toFloat() / max).coerceIn(0.08f, 1f))
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(color.copy(alpha = 0.45f))
+            )
+        }
+    }
+}
+
+private const val SPEED_BARS = 14
+
+/** Код страны выхода по названию сервера: «🇷🇺→🇫🇮 Москва» → FI, «🇩🇪 Германия» → DE. */
+private fun exitCountryCode(remarks: String): String? {
+    val flags = Regex("[\\x{1F1E6}-\\x{1F1FF}]{2}").findAll(remarks).map { it.value }.toList()
+    val flag = (if ("→" in remarks) flags.lastOrNull() else flags.firstOrNull()) ?: return null
+    val cps = flag.codePoints().toArray()
+    return cps.joinToString("") { (('A'.code + it - 0x1F1E6).toChar()).toString() }
+}
+
+private fun countryLabel(code: String?): Pair<String, String> {
+    val cc = code?.uppercase()?.takeIf { it.length == 2 && it.all { c -> c in 'A'..'Z' } } ?: return "🌐" to (code ?: "")
+    val flag = cc.map { String(Character.toChars(0x1F1E6 + (it - 'A'))) }.joinToString("")
+    val name = java.util.Locale("", cc).getDisplayCountry(java.util.Locale("ru")).ifEmpty { cc }
+    return flag to name
+}
+
+private fun speedText(bps: Long): String {
+    val bits = bps * 8.0
+    return when {
+        bits >= 1_000_000 -> String.format(java.util.Locale("ru"), "%.1f Мбит/с", bits / 1_000_000)
+        else -> String.format(java.util.Locale("ru"), "%.0f Кбит/с", bits / 1_000)
+    }
+}
+
+private fun bytesText(b: Long): String = when {
+    b >= 1L shl 30 -> String.format(java.util.Locale("ru"), "%.1f ГБ", b / (1L shl 30).toDouble())
+    b >= 1L shl 20 -> String.format(java.util.Locale("ru"), "%.0f МБ", b / (1L shl 20).toDouble())
+    else -> String.format(java.util.Locale("ru"), "%.0f КБ", b / 1024.0)
+}
+
+@Composable
+private fun StatusPill(text: String) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(99.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
+        Text(text = text, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -443,35 +617,117 @@ private fun daysWord(n: Int): String {
     }
 }
 
+/**
+ * NEXALINK бесплатный: первый запуск, подписок ещё нет. Доступ запрашивается сам
+ * (см. MainViewModel.initialize), здесь — ожидание, ошибка и повтор вручную.
+ */
+@Composable
+private fun FreeAccessContent(
+    isLoading: Boolean,
+    error: String?,
+    onGetAccess: () -> Unit,
+    onPasteLink: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth().statusBarsPadding()) {
+        Column(
+            modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            androidx.compose.foundation.Image(
+                painter = painterResource(R.drawable.nexalink_logo),
+                contentDescription = null,
+                modifier = Modifier.size(72.dp).clip(RoundedCornerShape(20.dp)),
+            )
+            Spacer(modifier = Modifier.height(22.dp))
+            Text(
+                text = "НЕКОММЕРЧЕСКИЙ ПРОЕКТ",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.secondary,
+                letterSpacing = androidx.compose.ui.unit.TextUnit(1.4f, androidx.compose.ui.unit.TextUnitType.Sp),
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "VPN, который обходит блокировки",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = if (isLoading) "Получаем для вас личный доступ…"
+                else "Бесплатно, без регистрации и рекламы. Российские сайты работают напрямую.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (error != null && !isLoading) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(text = error, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+            }
+        }
+        Button(
+            onClick = onGetAccess,
+            enabled = !isLoading,
+            shape = RoundedCornerShape(99.dp),
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Text("Получить доступ", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        Text(
+            text = "✓ Не нужно вводить email или телефон",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+        )
+        TextButton(onClick = onPasteLink, enabled = !isLoading, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+            Text("У меня есть ссылка", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
 @Composable
 private fun ServerSelectorCard(
     serverName: String,
     isAutoMode: Boolean,
+    ping: String?,
+    exitIp: String?,
+    exitCountry: String?,
+    isRunning: Boolean,
     onClick: () -> Unit,
 ) {
     val isEmergency = !isAutoMode && isEmergencyServerName(serverName)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(18.dp))
             .clickable(onClick = onClick),
-        color = if (isEmergency) colorPingRed.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 2.dp,
+        color = if (isEmergency) colorPingRed.copy(alpha = 0.1f) else MaterialTheme.colorScheme.background,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(18.dp),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 18.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(42.dp)
                     .clip(CircleShape)
                     .background(
                         if (isEmergency) colorPingRed.copy(alpha = 0.18f)
-                        else MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceContainer
                     ),
                 contentAlignment = Alignment.Center,
             ) {
@@ -482,25 +738,125 @@ private fun ServerSelectorCard(
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (isAutoMode) "Авто" else if (isEmergency) "Аварийный режим" else "Сервер",
-                    style = MaterialTheme.typography.labelMedium,
+                    text = if (isEmergency) "Аварийный режим" else "Сервер",
+                    style = MaterialTheme.typography.labelSmall,
                     color = if (isEmergency) colorPingRed else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = serverName,
+                    text = if (isAutoMode) "Авто · самый быстрый" else serverDisplayName(serverName),
                     style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.SemiBold,
                     color = if (isEmergency) colorPingRed else Color.Unspecified,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // бывшая карточка «Ваш IP для сайтов»: адрес выхода, страна — если её нет в названии сервера
+                if (isRunning) {
+                    val (flag, country) = countryLabel(exitCountry)
+                    val shown = if (isAutoMode) serverName else serverDisplayName(serverName)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(top = 2.dp)) {
+                        Box(modifier = Modifier.size(6.dp).clip(CircleShape)
+                            .background(if (exitIp != null) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.outline))
+                        Text(
+                            text = when {
+                                exitIp == null -> "IP для сайтов: определяем…"
+                                country.isNotEmpty() && !shown.contains(country) -> "IP для сайтов: $exitIp · $flag $country"
+                                else -> "IP для сайтов: $exitIp"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+            if (ping != null && !isAutoMode) {
+                Text(text = ping, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.tertiary)
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(16.dp),
             )
+        }
+    }
+}
+
+/**
+ * NEXALINK: окно новости с сайта — в стиле приложения: значок по типу, заголовок,
+ * текст, кнопка-«таблетка» и «Поделиться с друзьями» (ссылка на nexalink.online).
+ */
+@Composable
+private fun AnnouncementDialog(type: String?, title: String, body: String, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val (emoji, tint) = when (type) {
+        "warning" -> "!" to MaterialTheme.colorScheme.secondary
+        "success" -> "✓" to MaterialTheme.colorScheme.tertiary
+        "promo" -> "★" to MaterialTheme.colorScheme.secondary
+        else -> "i" to MaterialTheme.colorScheme.primary
+    }
+    // эмодзи в конце заголовка с сайта оставляем, а значок в начале рисуем сами
+    val cleanTitle = title.trim()
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.background, tonalElevation = 0.dp,
+            shadowElevation = 12.dp) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    androidx.compose.foundation.Image(
+                        painter = painterResource(R.drawable.nexalink_logo), contentDescription = null,
+                        modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)),
+                    )
+                    Text("NEXALINK", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Box(modifier = Modifier.size(30.dp).clip(CircleShape).background(tint.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center) {
+                        Text(emoji, color = tint, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+                Spacer(modifier = Modifier.height(18.dp))
+                Text(cleanTitle, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(body, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.height(22.dp))
+                Button(onClick = onDismiss, shape = RoundedCornerShape(99.dp), modifier = Modifier.fillMaxWidth().height(50.dp)) {
+                    Text("Понятно", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                }
+                TextButton(
+                    onClick = {
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                            .putExtra(android.content.Intent.EXTRA_TEXT, "NEXALINK — бесплатный VPN без регистрации: https://nexalink.online")
+                        context.startActivity(android.content.Intent.createChooser(send, "Поделиться NEXALINK"))
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Поделиться с друзьями", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+
+/** «Поделиться NEXALINK» — мягкая кнопка-таблетка под карточкой сервера, открывает шторку приглашения. */
+@Composable
+private fun ShareButton(onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(99.dp)).clickable(onClick = onClick),
+        shape = RoundedCornerShape(99.dp),
+        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f),
+    ) {
+        Row(modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center) {
+            Icon(painter = painterResource(R.drawable.ic_share_24dp), contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.size(8.dp))
+            Text("Поделиться NEXALINK с друзьями", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.secondary)
         }
     }
 }

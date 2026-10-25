@@ -15,6 +15,7 @@ import online.nexalink.app.enums.BalancerStrategyType
 import online.nexalink.app.enums.CoreResolvedType
 import online.nexalink.app.enums.EConfigType
 import online.nexalink.app.extension.isNotNullEmpty
+import online.nexalink.app.handler.AdListUpdater
 import online.nexalink.app.handler.MmkvManager
 import online.nexalink.app.handler.SettingsManager
 import online.nexalink.app.util.HttpUtil
@@ -100,7 +101,8 @@ object CoreConfigManager {
         val json = JsonUtil.parseString(raw)?.takeIf { it.isJsonObject }?.asJsonObject ?: return result
 
         // Inject or remove traffic statistics configuration based on user preference
-        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED) == true) {
+        // NEXALINK: статистика нужна всегда — скорость и трафик на главном экране и в виджетах
+        if (true) {
             if (!json.has("stats")) {
                 json.add("stats", JsonObject())
             }
@@ -708,10 +710,7 @@ object CoreConfigManager {
      * Remove speed-test runtime sections when the feature is disabled.
      */
     private fun applySpeedDisabled(v2rayConfig: V2rayConfig) {
-        if (MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED) != true) {
-            v2rayConfig.stats = null
-            v2rayConfig.policy = null
-        }
+        // NEXALINK: не отключаем — статистика нужна главному экрану и виджетам (TrafficStatsHub)
     }
 
     /*
@@ -1191,6 +1190,12 @@ object CoreConfigManager {
                 }
             }
             rule.ip = updatedIpList
+        }
+
+        // NEXALINK: правило блокировки рекламы дополняем расширенным списком, если он уже скачан
+        // (AdListUpdater). Без файла ядро не стартует — поэтому только при наличии.
+        if (rule.domain?.contains(AppConfig.GEOSITE_ADS_ALL) == true && AdListUpdater.isReady(context)) {
+            rule.domain = rule.domain.orEmpty() + "ext:${AppConfig.NEXALINK_ADS_DAT}:ads"
         }
 
         if (SettingsManager.canUseProcessRouting()) {

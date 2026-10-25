@@ -20,6 +20,7 @@ import online.nexalink.app.enums.PermissionType
 import online.nexalink.app.extension.toast
 import online.nexalink.app.extension.toastError
 import online.nexalink.app.extension.toastSuccess
+import online.nexalink.app.handler.NexalinkAccountManager
 import online.nexalink.app.handler.AngConfigManager
 import online.nexalink.app.handler.MmkvManager
 import online.nexalink.app.handler.SettingsChangeManager
@@ -88,7 +89,10 @@ class MainActivity : HelperBaseComponentActivity() {
             val refreshGroups = SettingsChangeManager.consumeSetupGroupTab()
             mainViewModel.refreshUiSettings()
             if (refreshGroups) mainViewModel.onAction(MainAction.RefreshGroups)
-            if (restartService && mainViewModel.uiState.value.isRunning) restartV2Ray()
+            if (restartService && mainViewModel.uiState.value.isRunning) {
+                LogUtil.i(AppConfig.TAG, "Restart VPN: settings changed")
+                restartV2Ray()
+            }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -163,6 +167,7 @@ class MainActivity : HelperBaseComponentActivity() {
     private fun navigateTo(destination: MainDestination) {
         val intent = when (destination) {
             MainDestination.NexalinkAccount -> Intent(this, NexalinkAccountActivity::class.java)
+            MainDestination.Invite -> return // шторка открывается прямо в MainScreen
             MainDestination.Subscriptions -> Intent(this, SubSettingActivity::class.java)
             MainDestination.PerAppProxy -> Intent(this, PerAppProxyActivity::class.java)
             MainDestination.Routing -> Intent(this, RoutingSettingActivity::class.java)
@@ -261,7 +266,24 @@ class MainActivity : HelperBaseComponentActivity() {
 
     private fun importClipboard() {
         try {
-            val text = Utils.getClipboard(this)
+            val text = Utils.getClipboard(this)?.trim().orEmpty()
+            // NEXALINK: пустой буфер раньше давал просто «Ошибка» — объясняем, что сделать
+            if (text.isEmpty()) {
+                toastError("Сначала скопируйте ссылку доступа, затем нажмите ещё раз")
+                return
+            }
+            // наша ссылка доступа — как переход по ссылке: одна подписка NEXALINK, без дублей
+            val subUrl = Regex("https://sub\\.nexalink\\.online/[A-Za-z0-9_-]+").find(text)?.value
+            if (subUrl != null) {
+                lifecycleScope.launch {
+                    val result = withContext(Dispatchers.IO) { NexalinkAccountManager.importSubscription(subUrl) }
+                    if (result.configCount > 0) toastSuccess("Доступ подключён. Серверов: ${result.configCount}")
+                    else toastError("Не удалось загрузить доступ по ссылке. Проверьте интернет и попробуйте ещё раз")
+                    mainViewModel.onAction(MainAction.RefreshGroups)
+                    mainViewModel.onAction(MainAction.RefreshOnForeground)
+                }
+                return
+            }
             mainViewModel.onAction(MainAction.ImportBatchConfig(text))
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to import config from clipboard", e)

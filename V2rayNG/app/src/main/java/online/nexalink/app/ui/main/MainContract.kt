@@ -30,7 +30,24 @@ data class MainUiState(
     val activeAnnouncement: AnnouncementInfo? = null,
     // NEXALINK: сколько дней осталось до конца подписки — null, если рано
     // напоминать (либо срок неизвестен), отрицательное — уже закончилась.
-    val subscriptionDaysLeft: Int? = null
+    val subscriptionDaysLeft: Int? = null,
+    // NEXALINK бесплатный: на устройстве ещё нет ни одной подписки/сервера —
+    // вместо кнопки подключения показываем получение доступа.
+    val needsAccess: Boolean = false,
+    val freeAccessLoading: Boolean = false,
+    val freeAccessError: String? = null,
+    // метки под кнопкой подключения
+    val adBlockOn: Boolean = true,
+    val ruDirectOn: Boolean = true,
+    // карточки «Скорость · Трафик» и «Ваш IP для сайтов» (только когда подключено)
+    val downBps: Long = 0,
+    val upBps: Long = 0,
+    val speedHistory: List<Long> = emptyList(),
+    val sessionBytes: Long = 0,
+    val todayBytes: Long = 0,
+    val sessionStartMs: Long = 0,
+    val ipCountry: String? = null,
+    val ip: String? = null,
 )
 
 /**
@@ -78,6 +95,7 @@ sealed interface MainAction {
     data object DismissUpdateDialog : MainAction
     data object DismissAnnouncementDialog : MainAction
     data object DismissSubscriptionBanner : MainAction
+    data object GetFreeAccess : MainAction
 
     data class ImportBatchConfig(val configText: String) : MainAction
 
